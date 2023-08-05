@@ -159,21 +159,20 @@ int main(int argc, char *argv[]) {
         node_t &curr_node = bvh.nodes[curr_idx];
         stk_3.pop();
 
+        if (curr_node.is_leaf())
+            continue;
+
         size_t left_node_idx = curr_node.first_child_or_primitive;
         size_t right_node_idx = left_node_idx + 1;
 
         if (t_stay[t_buf_map[curr_idx] + curr_offset]) {
             stay[curr_idx] = true;
-            if (!curr_node.is_leaf()) {
-                stk_3.emplace(right_node_idx, t_buf_map[right_node_idx] + 1 + curr_offset);
-                stk_3.emplace(left_node_idx, t_buf_map[left_node_idx] + 1 + curr_offset);
-            }
+            stk_3.emplace(right_node_idx, 1 + curr_offset);
+            stk_3.emplace(left_node_idx, 1 + curr_offset);
         } else {
             stay[curr_idx] = false;
-            if (!curr_node.is_leaf()) {
-                stk_3.emplace(right_node_idx, t_buf_map[right_node_idx]);
-                stk_3.emplace(left_node_idx, t_buf_map[left_node_idx]);
-            }
+            stk_3.emplace(right_node_idx, 0);
+            stk_3.emplace(left_node_idx, 0);
         }
     }
 
