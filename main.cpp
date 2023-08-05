@@ -27,7 +27,7 @@ bbox_t get_quant_bbox(bvh_t &bvh, size_t node_idx, size_t quant_idx, int quant_b
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 5) {
+    if (argc != 6) {
         std::cerr << "usage: ./a.out MODEL_FILE QUANT_BITS T_TRV T_SWITCH T_IST" << std::endl;
         exit(EXIT_FAILURE);
     }
