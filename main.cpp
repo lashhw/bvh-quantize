@@ -19,9 +19,16 @@ bbox_t get_quant_bbox(bvh_t &bvh, size_t node_idx, size_t quant_idx, int quant_b
 
     bbox_t ret;
     for (int i = 0; i < 3; i++) {
-        float scaling_factor = (quant_bbox.max[i] - quant_bbox.min[i]) / (float)quant_num;
-        ret.min[i] = quant_bbox.min[i] + scaling_factor * floorf((node_bbox.min[i] - quant_bbox.min[i]) / scaling_factor);
-        ret.max[i] = quant_bbox.min[i] + scaling_factor * ceilf((node_bbox.max[i] - quant_bbox.min[i]) / scaling_factor);
+        if (quant_bbox.min[i] == quant_bbox.max[i]) {
+            ret.min[i] = quant_bbox.min[i];
+            ret.max[i] = quant_bbox.max[i];
+        } else {
+            float scaling_factor = (quant_bbox.max[i] - quant_bbox.min[i]) / (float)quant_num;
+            ret.min[i] = quant_bbox.min[i] + scaling_factor * floorf((node_bbox.min[i] - quant_bbox.min[i]) / scaling_factor);
+            ret.max[i] = quant_bbox.min[i] + scaling_factor * ceilf((node_bbox.max[i] - quant_bbox.min[i]) / scaling_factor);
+        }
+        assert(std::isfinite(ret.min[i]));
+        assert(std::isfinite(ret.max[i]));
     }
     return ret;
 }
@@ -132,6 +139,8 @@ int main(int argc, char *argv[]) {
                     float right_switch_t = t_buf[t_buf_map[right_node_idx]];
                     float curr_switch_t = (t_trv * 2 + t_switch) * half_area + left_switch_t + right_switch_t;
 
+                    assert(std::isfinite(curr_stay_t));
+                    assert(std::isfinite(curr_switch_t));
                     if (curr_stay_t < curr_switch_t) {
                         curr_t_buf = curr_stay_t;
                         curr_t_stay = true;
