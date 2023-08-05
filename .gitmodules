@@ -1,0 +1,7 @@
+[submodule "bvh"]
+	path = bvh
+	url = https://github.com/madmann91/bvh.git
+	branch = v1
+[submodule "happly"]
+	path = happly
+	url = https://github.com/nmwsharp/happly.git
