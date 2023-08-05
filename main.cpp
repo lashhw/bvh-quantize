@@ -86,14 +86,14 @@ int main(int argc, char *argv[]) {
         if (!curr_node.is_leaf()) {
             size_t left_node_idx = curr_node.first_child_or_primitive;
             size_t right_node_idx = left_node_idx + 1;
-            stk_1.emplace(left_node_idx, depth + 1);
             stk_1.emplace(right_node_idx, depth + 1);
+            stk_1.emplace(left_node_idx, depth + 1);
         }
     }
 
     std::vector<size_t> parent(bvh.node_count);
     std::vector<float> t_buf(t_buf_size);
-    std::vector<bool> stay(t_buf_size);
+    std::vector<char> stay(t_buf_size);
     std::stack<std::pair<size_t, bool>> stk_2;
     stk_2.emplace(root_right_node_idx, true);
     stk_2.emplace(root_left_node_idx, true);
@@ -120,6 +120,7 @@ int main(int argc, char *argv[]) {
                 float half_area = quant_bbox.half_area();
 
                 float &curr_t_buf = t_buf[t_buf_map[curr_idx] + i];
+                char &curr_stay = stay[t_buf_map[curr_idx] + i];
                 if (curr_node.is_leaf()) {
                     curr_t_buf = t_ist * (float)curr_node.primitive_count * half_area;
                 } else {
@@ -132,11 +133,11 @@ int main(int argc, char *argv[]) {
                     float curr_switch_t = (t_trv * 2 + t_switch) * half_area + left_switch_t + right_switch_t;
 
                     if (curr_stay_t < curr_switch_t) {
-                        t_buf[curr_idx] = curr_stay_t;
-                        stay[curr_idx] = true;
+                        curr_t_buf = curr_stay_t;
+                        curr_stay = true;
                     } else {
-                        t_buf[curr_idx] = curr_switch_t;
-                        stay[curr_idx] = false;
+                        curr_t_buf = curr_switch_t;
+                        curr_stay = false;
                     }
                 }
 
