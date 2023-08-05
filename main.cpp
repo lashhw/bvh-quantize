@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
 
     std::vector<size_t> parent(bvh.node_count);
     std::vector<float> t_buf(t_buf_size);
-    std::vector<char> stay(t_buf_size);
+    std::vector<char> t_stay(t_buf_size);
     std::stack<std::pair<size_t, bool>> stk_2;
     stk_2.emplace(root_right_node_idx, true);
     stk_2.emplace(root_left_node_idx, true);
@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
                 float half_area = quant_bbox.half_area();
 
                 float &curr_t_buf = t_buf[t_buf_map[curr_idx] + i];
-                char &curr_stay = stay[t_buf_map[curr_idx] + i];
+                char &curr_t_stay = t_stay[t_buf_map[curr_idx] + i];
                 if (curr_node.is_leaf()) {
                     curr_t_buf = t_ist * (float)curr_node.primitive_count * half_area;
                 } else {
@@ -134,10 +134,10 @@ int main(int argc, char *argv[]) {
 
                     if (curr_stay_t < curr_switch_t) {
                         curr_t_buf = curr_stay_t;
-                        curr_stay = true;
+                        curr_t_stay = true;
                     } else {
                         curr_t_buf = curr_switch_t;
-                        curr_stay = false;
+                        curr_t_stay = false;
                     }
                 }
 
@@ -148,4 +148,69 @@ int main(int argc, char *argv[]) {
             }
         }
     }
+
+    std::vector<bool> stay(bvh.node_count);
+    stay[0] = true;
+    std::stack<std::pair<size_t, int>> stk_3;
+    stk_3.emplace(root_right_node_idx, 0);
+    stk_3.emplace(root_left_node_idx, 0);
+    while (!stk_3.empty()) {
+        auto [curr_idx, curr_offset] = stk_3.top();
+        node_t &curr_node = bvh.nodes[curr_idx];
+        stk_3.pop();
+
+        size_t left_node_idx = curr_node.first_child_or_primitive;
+        size_t right_node_idx = left_node_idx + 1;
+
+        if (t_stay[t_buf_map[curr_idx] + curr_offset]) {
+            stay[curr_idx] = true;
+            if (!curr_node.is_leaf()) {
+                stk_3.emplace(right_node_idx, t_buf_map[right_node_idx] + 1 + curr_offset);
+                stk_3.emplace(left_node_idx, t_buf_map[left_node_idx] + 1 + curr_offset);
+            }
+        } else {
+            stay[curr_idx] = false;
+            if (!curr_node.is_leaf()) {
+                stk_3.emplace(right_node_idx, t_buf_map[right_node_idx]);
+                stk_3.emplace(left_node_idx, t_buf_map[left_node_idx]);
+            }
+        }
+    }
+
+    std::ofstream graph_fs("graph.dot");
+    graph_fs << "digraph bvh {\n";
+    graph_fs << "    layout=twopi\n";
+    graph_fs << "    ranksep=2\n";
+    graph_fs << "    root=0\n";
+    graph_fs << "    node [shape=point]\n";
+    graph_fs << "    edge [arrowhead=none penwidth=0.5]\n";
+    graph_fs << "    0 [shape=circle label=root]\n";
+
+    std::array<std::string, 3> cmap = {"black", "red", "green"};
+    std::queue<std::pair<size_t, int>> que;
+    que.emplace(0, 0);
+    for (int i = 0; i < 100 && !que.empty(); i++) {
+        auto [curr_idx, curr_color] = que.front();
+        node_t &curr_node = bvh.nodes[curr_idx];
+        que.pop();
+
+        if (!curr_node.is_leaf()) {
+            size_t left_idx = curr_node.first_child_or_primitive;
+            size_t right_idx = left_idx + 1;
+            int left_color = curr_color;
+            int right_color = curr_color;
+            if (!stay[curr_idx]) {
+                left_color = (curr_color + 1) % 3;
+                right_color = (curr_color + 2) % 3;
+            }
+            graph_fs << "    " << curr_idx << " -> " << left_idx << " [color=" << cmap[left_color] << "]\n";
+            graph_fs << "    " << curr_idx << " -> " << right_idx << " [color=" << cmap[right_color] << "]\n";
+            if (!curr_node.is_leaf()) {
+                que.emplace(left_idx, left_color);
+                que.emplace(right_idx, right_color);
+            }
+        }
+    }
+
+    graph_fs << "}";
 }
