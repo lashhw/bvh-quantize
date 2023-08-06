@@ -194,10 +194,10 @@ int main(int argc, char *argv[]) {
     graph_fs << "    edge [arrowhead=none penwidth=0.5]\n";
     graph_fs << "    0 [shape=circle label=root]\n";
 
-    std::array<std::string, 3> cmap = {"black", "red", "green"};
+    std::array<std::string, 2> cmap = {"black", "red"};
     std::queue<std::pair<size_t, int>> que;
     que.emplace(0, 0);
-    for (int i = 0; i < 100 && !que.empty(); i++) {
+    for (int i = 0; i < 1000 && !que.empty(); i++) {
         auto [curr_idx, curr_color] = que.front();
         node_t &curr_node = bvh.nodes[curr_idx];
         que.pop();
@@ -208,8 +208,8 @@ int main(int argc, char *argv[]) {
             int left_color = curr_color;
             int right_color = curr_color;
             if (!stay[curr_idx]) {
-                left_color = (curr_color + 1) % 3;
-                right_color = (curr_color + 2) % 3;
+                left_color = (curr_color + 1) % 2;
+                right_color = left_color;
             }
             graph_fs << "    " << curr_idx << " -> " << left_idx << " [color=" << cmap[left_color] << "]\n";
             graph_fs << "    " << curr_idx << " -> " << right_idx << " [color=" << cmap[right_color] << "]\n";
