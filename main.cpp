@@ -205,17 +205,16 @@ int main(int argc, char *argv[]) {
         if (!curr_node.is_leaf()) {
             size_t left_idx = curr_node.first_child_or_primitive;
             size_t right_idx = left_idx + 1;
-            int left_color = curr_color;
-            int right_color = curr_color;
-            if (!stay[curr_idx]) {
-                left_color = (curr_color + 1) % 2;
-                right_color = left_color;
-            }
-            graph_fs << "    " << curr_idx << " -> " << left_idx << " [color=" << cmap[left_color] << "]\n";
-            graph_fs << "    " << curr_idx << " -> " << right_idx << " [color=" << cmap[right_color] << "]\n";
+            int child_color;
+            if (stay[curr_idx])
+                child_color = curr_color;
+            else
+                child_color = (curr_color + 1) % 2;
+            graph_fs << "    " << curr_idx << " -> " << left_idx << " [color=" << cmap[child_color] << "]\n";
+            graph_fs << "    " << curr_idx << " -> " << right_idx << " [color=" << cmap[child_color] << "]\n";
             if (!curr_node.is_leaf()) {
-                que.emplace(left_idx, left_color);
-                que.emplace(right_idx, right_color);
+                que.emplace(left_idx, child_color);
+                que.emplace(right_idx, child_color);
             }
         }
     }
