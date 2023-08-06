@@ -205,11 +205,7 @@ int main(int argc, char *argv[]) {
         if (!curr_node.is_leaf()) {
             size_t left_idx = curr_node.first_child_or_primitive;
             size_t right_idx = left_idx + 1;
-            int child_color;
-            if (stay[curr_idx])
-                child_color = curr_color;
-            else
-                child_color = (curr_color + 1) % 2;
+            int child_color = stay[curr_idx] ? curr_color : (curr_color + 1) % 2;
             graph_fs << "    " << curr_idx << " -> " << left_idx << " [color=" << cmap[child_color] << "]\n";
             graph_fs << "    " << curr_idx << " -> " << right_idx << " [color=" << cmap[child_color] << "]\n";
             if (!curr_node.is_leaf()) {
