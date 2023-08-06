@@ -12,6 +12,8 @@ typedef bvh::BoundingBox<float> bbox_t;
 typedef bvh::SweepSahBuilder<bvh_t> builder_t;
 typedef bvh_t::Node node_t;
 
+constexpr int graph_node_limit = 1000;
+
 bbox_t get_quant_bbox(bvh_t &bvh, size_t node_idx, size_t quant_idx, int quant_bits) {
     bbox_t node_bbox = bvh.nodes[node_idx].bounding_box_proxy().to_bounding_box();
     bbox_t quant_bbox = bvh.nodes[quant_idx].bounding_box_proxy().to_bounding_box();
@@ -195,23 +197,39 @@ int main(int argc, char *argv[]) {
     graph_fs << "    0 [shape=circle label=root]\n";
 
     std::array<std::string, 2> cmap = {"black", "red"};
-    std::queue<std::pair<size_t, int>> que;
-    que.emplace(0, 0);
-    for (int i = 0; i < 1000 && !que.empty(); i++) {
-        auto [curr_idx, curr_color] = que.front();
+    std::vector<std::vector<size_t>> cluster_indices(1);
+    int num_clusters = 1;
+    std::queue<std::tuple<size_t, int, int>> que;
+    que.emplace(0, 0, 0);
+    for (int i = 0; !que.empty(); i++) {
+        auto [curr_idx, curr_color, curr_cluster] = que.front();
         node_t &curr_node = bvh.nodes[curr_idx];
         que.pop();
+
+        cluster_indices[curr_cluster].push_back(curr_idx);
 
         if (!curr_node.is_leaf()) {
             size_t left_idx = curr_node.first_child_or_primitive;
             size_t right_idx = left_idx + 1;
-            int child_color = stay[curr_idx] ? curr_color : (curr_color + 1) % 2;
-            graph_fs << "    " << curr_idx << " -> " << left_idx << " [color=" << cmap[child_color] << "]\n";
-            graph_fs << "    " << curr_idx << " -> " << right_idx << " [color=" << cmap[child_color] << "]\n";
-            if (!curr_node.is_leaf()) {
-                que.emplace(left_idx, child_color);
-                que.emplace(right_idx, child_color);
+
+            int child_color;
+            int child_cluster;
+            if (stay[curr_idx]) {
+                child_color = curr_color;
+                child_cluster = curr_cluster;
+            } else {
+                child_color = (curr_color + 1) % 2;
+                child_cluster = num_clusters++;
+                cluster_indices.emplace_back();
             }
+
+            if (i < graph_node_limit) {
+                graph_fs << "    " << curr_idx << " -> " << left_idx << " [color=" << cmap[child_color] << "]\n";
+                graph_fs << "    " << curr_idx << " -> " << right_idx << " [color=" << cmap[child_color] << "]\n";
+            }
+
+            que.emplace(left_idx, child_color, child_cluster);
+            que.emplace(right_idx, child_color, child_cluster);
         }
     }
 
