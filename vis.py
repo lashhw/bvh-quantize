@@ -22,6 +22,7 @@ def click_callback(pos):
         box_mesh += pv.Box(bbox[i])
     p.add_mesh(box_mesh, color='red', style='wireframe')
     cluster_idx += 1
+    p.add_text(f'{cluster_idx}/{len(cluster_size)}')
 
 p.track_click_position(click_callback)
 p.add_mesh(ply_mesh, opacity=0.1)
