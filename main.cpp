@@ -12,8 +12,6 @@ typedef bvh::BoundingBox<float> bbox_t;
 typedef bvh::SweepSahBuilder<bvh_t> builder_t;
 typedef bvh_t::Node node_t;
 
-constexpr int graph_node_limit = 1000;
-
 bbox_t get_quant_bbox(bvh_t &bvh, size_t node_idx, size_t quant_idx, int quant_bits) {
     bbox_t node_bbox = bvh.nodes[node_idx].bounding_box_proxy().to_bounding_box();
     bbox_t quant_bbox = bvh.nodes[quant_idx].bounding_box_proxy().to_bounding_box();
@@ -201,10 +199,10 @@ int main(int argc, char *argv[]) {
     std::array<std::string, 2> cmap = {"black", "red"};
     std::vector<std::vector<size_t>> cluster_indices(1);
     int num_clusters = 1;
-    std::queue<std::tuple<size_t, int, int>> que;
-    que.emplace(0, 0, 0);
+    std::queue<std::tuple<size_t, int, int, int>> que;
+    que.emplace(0, 0, 0, 0);
     for (int i = 0; !que.empty(); i++) {
-        auto [curr_idx, curr_color, curr_cluster] = que.front();
+        auto [curr_idx, curr_color, curr_cluster, curr_depth] = que.front();
         node_t &curr_node = bvh.nodes[curr_idx];
         que.pop();
 
@@ -225,13 +223,14 @@ int main(int argc, char *argv[]) {
                 cluster_indices.emplace_back();
             }
 
-            if (i < graph_node_limit) {
-                graph_fs << "    " << curr_idx << " -> " << left_idx << " [color=" << cmap[child_color] << "]\n";
-                graph_fs << "    " << curr_idx << " -> " << right_idx << " [color=" << cmap[child_color] << "]\n";
-            }
+            int child_depth = curr_depth + 1;
+            graph_fs << "    " << curr_idx << " -> " << left_idx << " [color=" << cmap[child_color] << "]\n";
+            graph_fs << "    " << curr_idx << " -> " << right_idx << " [color=" << cmap[child_color] << "]\n";
+            graph_fs << "    " << left_idx << " [depth=" << child_depth << "]\n";
+            graph_fs << "    " << right_idx << " [depth=" << child_depth << "]\n";
 
-            que.emplace(left_idx, child_color, child_cluster);
-            que.emplace(right_idx, child_color, child_cluster);
+            que.emplace(left_idx, child_color, child_cluster, child_depth);
+            que.emplace(right_idx, child_color, child_cluster, child_depth);
         }
     }
 
