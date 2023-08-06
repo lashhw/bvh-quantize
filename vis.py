@@ -24,5 +24,5 @@ def click_callback(pos):
     cluster_idx += 1
 
 p.track_click_position(click_callback)
-p.add_mesh(ply_mesh, opacity=0.3)
+p.add_mesh(ply_mesh, opacity=0.1)
 p.show()
