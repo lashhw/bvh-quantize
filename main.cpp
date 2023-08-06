@@ -76,6 +76,7 @@ int main(int argc, char *argv[]) {
     builder_t builder(bvh);
     builder.build(global_bbox, bboxes.get(), centers.get(), triangles.size());
 
+    std::cout << "clustering..." << std::endl;
     int t_buf_size = 0;
     std::stack<std::pair<size_t, int>> stk_1;
     std::vector<int> t_buf_map(bvh.node_count, -1);
@@ -187,6 +188,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    std::cout << "output result..." << std::endl;
     std::ofstream graph_fs("graph.dot");
     graph_fs << "digraph bvh {\n";
     graph_fs << "    layout=twopi\n";
