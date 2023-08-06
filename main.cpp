@@ -234,4 +234,14 @@ int main(int argc, char *argv[]) {
     }
 
     graph_fs << "}";
+
+    std::ofstream cluster_size_fs("cluster_size.bin", std::ios::binary);
+    std::ofstream bbox_fs("bbox.bin", std::ios::binary);
+    for (const auto &x : cluster_indices) {
+        uint32_t size = x.size();
+        cluster_size_fs.write((char*)(&size), sizeof(size));
+        for (const auto &y : x)
+            for (float plane : bvh.nodes[y].bounds)
+                bbox_fs.write((char*)(&plane), sizeof(plane));
+    }
 }
