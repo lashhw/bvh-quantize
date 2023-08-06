@@ -1,4 +1,5 @@
 #include <iostream>
+#include <numeric>
 #include <vector>
 #include <bvh/triangle.hpp>
 #include <bvh/bvh.hpp>
@@ -236,13 +237,22 @@ int main(int argc, char *argv[]) {
 
     graph_fs << "}";
 
+    std::vector<float> cluster_area;
+    for (auto &x : cluster_indices)
+        cluster_area.push_back(bvh.nodes[x[0]].bounding_box_proxy().half_area());
+    std::vector<int> sorted_cluster_indices(cluster_area.size());
+    std::iota(sorted_cluster_indices.begin(), sorted_cluster_indices.end(), 0);
+    std::sort(sorted_cluster_indices.begin(), sorted_cluster_indices.end(), [&](int l, int r) {
+        return cluster_area[l] > cluster_area[r];
+    });
+
     std::ofstream cluster_size_fs("cluster_size.bin", std::ios::binary);
     std::ofstream bbox_fs("bbox.bin", std::ios::binary);
-    for (const auto &x : cluster_indices) {
-        uint32_t size = x.size();
+    for (const auto &cluster_idx : sorted_cluster_indices) {
+        uint32_t size = cluster_indices[cluster_idx].size();
         cluster_size_fs.write((char*)(&size), sizeof(size));
-        for (const auto &y : x)
-            for (float plane : bvh.nodes[y].bounds)
+        for (const auto &idx : cluster_indices[cluster_idx])
+            for (float plane : bvh.nodes[idx].bounds)
                 bbox_fs.write((char*)(&plane), sizeof(plane));
     }
 }
