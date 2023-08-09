@@ -200,8 +200,9 @@ int main(int argc, char *argv[]) {
     graph_fs << "    0 [shape=circle label=root]\n";
 
     std::array<std::string, 2> cmap = {"black", "red"};
-    std::vector<std::vector<size_t>> cluster_indices(1);
     int num_clusters = 1;
+    std::vector<std::vector<size_t>> cluster_indices(1);
+    std::vector<size_t> quant_indices{0};
     std::queue<std::tuple<size_t, int, int, int>> que;
     que.emplace(0, 0, 0, 0);
     while (!que.empty()) {
@@ -224,6 +225,7 @@ int main(int argc, char *argv[]) {
                 child_color = (curr_color + 1) % 2;
                 child_cluster = num_clusters++;
                 cluster_indices.emplace_back();
+                quant_indices.push_back(curr_idx);
             }
 
             int child_depth = curr_depth + 1;
@@ -254,11 +256,20 @@ int main(int argc, char *argv[]) {
 
     std::ofstream cluster_size_fs("cluster_size.bin", std::ios::binary);
     std::ofstream bbox_fs("bbox.bin", std::ios::binary);
+    std::ofstream quant_bbox_fs("quant_bbox.bin", std::ios::binary);
     for (const auto &cluster_idx : sorted_cluster_indices) {
         uint32_t size = cluster_indices[cluster_idx].size();
         cluster_size_fs.write((char*)(&size), sizeof(size));
-        for (const auto &idx : cluster_indices[cluster_idx])
+        for (const auto &idx : cluster_indices[cluster_idx]) {
             for (float plane : bvh.nodes[idx].bounds)
                 bbox_fs.write((char*)(&plane), sizeof(plane));
+            bbox_t quant_bbox = get_quant_bbox(bvh, idx, quant_indices[cluster_idx], quant_bits);
+            quant_bbox_fs.write((char*)(&quant_bbox.min[0]), sizeof(quant_bbox.min[0]));
+            quant_bbox_fs.write((char*)(&quant_bbox.max[0]), sizeof(quant_bbox.max[0]));
+            quant_bbox_fs.write((char*)(&quant_bbox.min[1]), sizeof(quant_bbox.min[1]));
+            quant_bbox_fs.write((char*)(&quant_bbox.max[1]), sizeof(quant_bbox.max[1]));
+            quant_bbox_fs.write((char*)(&quant_bbox.min[2]), sizeof(quant_bbox.min[2]));
+            quant_bbox_fs.write((char*)(&quant_bbox.max[2]), sizeof(quant_bbox.max[2]));
+        }
     }
 }
