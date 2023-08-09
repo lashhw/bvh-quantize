@@ -77,8 +77,8 @@ int main(int argc, char *argv[]) {
 
     std::cout << "clustering..." << std::endl;
     int t_buf_size = 0;
-    std::stack<std::pair<size_t, int>> stk_1;
     std::vector<int> t_buf_map(bvh.node_count, -1);
+    std::stack<std::pair<size_t, int>> stk_1;
     node_t &root_node = bvh.nodes[0];
     size_t root_left_node_idx = root_node.first_child_or_primitive;
     size_t root_right_node_idx = root_left_node_idx + 1;
@@ -101,6 +101,8 @@ int main(int argc, char *argv[]) {
     }
 
     std::vector<size_t> parent(bvh.node_count);
+    parent[root_left_node_idx] = 0;
+    parent[root_right_node_idx] = 0;
     std::vector<float> t_buf(t_buf_size);
     std::vector<char> t_stay(t_buf_size);
     std::stack<std::pair<size_t, bool>> stk_2;
@@ -202,7 +204,7 @@ int main(int argc, char *argv[]) {
     int num_clusters = 1;
     std::queue<std::tuple<size_t, int, int, int>> que;
     que.emplace(0, 0, 0, 0);
-    for (int i = 0; !que.empty(); i++) {
+    while (!que.empty()) {
         auto [curr_idx, curr_color, curr_cluster, curr_depth] = que.front();
         node_t &curr_node = bvh.nodes[curr_idx];
         que.pop();
@@ -225,10 +227,10 @@ int main(int argc, char *argv[]) {
             }
 
             int child_depth = curr_depth + 1;
-            graph_fs << "    " << curr_idx << " -> " << left_idx << " [color=" << cmap[child_color] << "]\n";
-            graph_fs << "    " << curr_idx << " -> " << right_idx << " [color=" << cmap[child_color] << "]\n";
             graph_fs << "    " << left_idx << " [depth=" << child_depth << "]\n";
             graph_fs << "    " << right_idx << " [depth=" << child_depth << "]\n";
+            graph_fs << "    " << curr_idx << " -> " << left_idx << " [color=" << cmap[child_color] << "]\n";
+            graph_fs << "    " << curr_idx << " -> " << right_idx << " [color=" << cmap[child_color] << "]\n";
 
             que.emplace(left_idx, child_color, child_cluster, child_depth);
             que.emplace(right_idx, child_color, child_cluster, child_depth);
