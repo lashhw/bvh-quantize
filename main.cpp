@@ -238,8 +238,12 @@ int main(int argc, char *argv[]) {
     graph_fs << "}";
 
     std::vector<float> cluster_area;
-    for (auto &x : cluster_indices)
-        cluster_area.push_back(bvh.nodes[x[0]].bounding_box_proxy().half_area());
+    for (auto &x : cluster_indices) {
+        bbox_t largest_bbox = bbox_t::empty();
+        largest_bbox.extend(bvh.nodes[x[0]].bounding_box_proxy().to_bounding_box());
+        largest_bbox.extend(bvh.nodes[x[1]].bounding_box_proxy().to_bounding_box());
+        cluster_area.push_back(largest_bbox.volume());
+    }
     std::vector<int> sorted_cluster_indices(cluster_area.size());
     std::iota(sorted_cluster_indices.begin(), sorted_cluster_indices.end(), 0);
     std::sort(sorted_cluster_indices.begin(), sorted_cluster_indices.end(), [&](int l, int r) {
