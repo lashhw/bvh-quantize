@@ -18,16 +18,16 @@ bbox_t get_quant_bbox(bvh_t &bvh, size_t node_idx, size_t quant_idx, int quant_b
     bbox_t quant_bbox = bvh.nodes[quant_idx].bounding_box_proxy().to_bounding_box();
     int quant_num = 1 << quant_bits;
 
+    float max_len = 0.0f;
+    for (int i = 0; i < 3; i++)
+        max_len = std::max(max_len, quant_bbox.max[i] - quant_bbox.min[i]);
+    float scaling_factor = max_len / (float)quant_num;
+    assert(scaling_factor != 0.0f);
+
     bbox_t ret;
     for (int i = 0; i < 3; i++) {
-        if (quant_bbox.min[i] == quant_bbox.max[i]) {
-            ret.min[i] = quant_bbox.min[i];
-            ret.max[i] = quant_bbox.max[i];
-        } else {
-            float scaling_factor = (quant_bbox.max[i] - quant_bbox.min[i]) / (float)quant_num;
-            ret.min[i] = quant_bbox.min[i] + scaling_factor * floorf((node_bbox.min[i] - quant_bbox.min[i]) / scaling_factor);
-            ret.max[i] = quant_bbox.min[i] + scaling_factor * ceilf((node_bbox.max[i] - quant_bbox.min[i]) / scaling_factor);
-        }
+        ret.min[i] = quant_bbox.min[i] + scaling_factor * floorf((node_bbox.min[i] - quant_bbox.min[i]) / scaling_factor);
+        ret.max[i] = quant_bbox.min[i] + scaling_factor * ceilf((node_bbox.max[i] - quant_bbox.min[i]) / scaling_factor);
         assert(std::isfinite(ret.min[i]));
         assert(std::isfinite(ret.max[i]));
     }
