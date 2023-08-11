@@ -13,21 +13,58 @@ typedef bvh::BoundingBox<float> bbox_t;
 typedef bvh::SweepSahBuilder<bvh_t> builder_t;
 typedef bvh_t::Node node_t;
 
-bbox_t get_quant_bbox(bvh_t &bvh, size_t node_idx, size_t quant_idx, int quant_bits) {
-    bbox_t node_bbox = bvh.nodes[node_idx].bounding_box_proxy().to_bounding_box();
+float get_scaling_factor(const bvh_t &bvh, size_t quant_idx, int quant_num) {
     bbox_t quant_bbox = bvh.nodes[quant_idx].bounding_box_proxy().to_bounding_box();
-    int quant_num = 1 << quant_bits;
 
     float max_len = 0.0f;
     for (int i = 0; i < 3; i++)
         max_len = std::max(max_len, quant_bbox.max[i] - quant_bbox.min[i]);
+
     float scaling_factor = max_len / (float)quant_num;
-    assert(scaling_factor != 0.0f);
+    assert(scaling_factor > 0.0f);
+    return scaling_factor;
+}
+
+// return: [Zx, Zy, Zz]
+std::array<int, 3> get_zero_point(const bvh_t &bvh, size_t quant_idx, float scaling_factor) {
+    bbox_t quant_bbox = bvh.nodes[quant_idx].bounding_box_proxy().to_bounding_box();
+
+    std::array<int, 3> ret{};
+    for (int i = 0; i < 3; i++)
+        ret[i] = (int)floorf(quant_bbox.min[i] / scaling_factor);
+    return ret;
+}
+
+// return: [Qxmin, Qxmax, Qymin, Qymax, Qzmin, Qzmax]
+std::array<int, 6> get_quant_val(const bvh_t &bvh, size_t node_idx, float scaling_factor, int quant_bits,
+                                 const std::array<int, 3> &zero_point) {
+    bbox_t node_bbox = bvh.nodes[node_idx].bounding_box_proxy().to_bounding_box();
+
+    std::array<int, 6> ret{};
+    for (int i = 0; i < 3; i++) {
+        ret[i * 2] = (int)floorf(node_bbox.min[i] / scaling_factor) - zero_point[i];
+        ret[i * 2 + 1] = (int)ceilf(node_bbox.max[i] / scaling_factor) - zero_point[i];
+        int max_q = (1 << quant_bits);
+        assert(0 <= ret[i * 2] && ret[i * 2] <= max_q);
+        assert(0 <= ret[i * 2 + 1] && ret[i * 2 + 1] <= max_q);
+        if (ret[i * 2] == max_q)
+            ret[i * 2] = max_q - 1;
+        if (ret[i * 2 + 1] == max_q)
+            ret[i * 2 + 1] = max_q - 1;
+    }
+    return ret;
+}
+
+bbox_t get_quant_bbox(const bvh_t &bvh, size_t node_idx, size_t quant_idx, int quant_bits) {
+    int quant_num = (1 << quant_bits) - 2;
+    float scaling_factor = get_scaling_factor(bvh, quant_idx, quant_num);
+    std::array<int, 3> zero_point = get_zero_point(bvh, quant_idx, scaling_factor);
+    std::array<int, 6> quant_val = get_quant_val(bvh, node_idx, scaling_factor, quant_bits, zero_point);
 
     bbox_t ret;
     for (int i = 0; i < 3; i++) {
-        ret.min[i] = quant_bbox.min[i] + scaling_factor * floorf((node_bbox.min[i] - quant_bbox.min[i]) / scaling_factor);
-        ret.max[i] = quant_bbox.min[i] + scaling_factor * ceilf((node_bbox.max[i] - quant_bbox.min[i]) / scaling_factor);
+        ret.min[i] = scaling_factor * (float)(quant_val[i * 2] + zero_point[i]);
+        ret.max[i] = scaling_factor * (float)(quant_val[i * 2 + 1] + zero_point[i]);
         assert(std::isfinite(ret.min[i]));
         assert(std::isfinite(ret.max[i]));
     }

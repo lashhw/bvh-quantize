@@ -37,4 +37,5 @@ def keyboard_callback():
 p.track_click_position(click_callback)
 p.add_key_event('z', keyboard_callback)
 p.add_mesh(ply_mesh, opacity=0.1)
+p.add_axes_at_origin(labels_off=True)
 p.show()
