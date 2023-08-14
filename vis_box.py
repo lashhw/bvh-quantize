@@ -3,7 +3,8 @@ import numpy as np
 import sys
 
 if len(sys.argv) != 2:
-    print('usage: python vis.py MODEL_FILE')
+    print('usage: python vis_box.py MODEL_FILE')
+    exit(1)
 
 ply_mesh = pv.read(sys.argv[1])
 p = pv.Plotter()
