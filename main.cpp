@@ -4,6 +4,8 @@
 #include <bvh/triangle.hpp>
 #include <bvh/bvh.hpp>
 #include <bvh/sweep_sah_builder.hpp>
+#include <bvh/single_ray_traverser.hpp>
+#include <bvh/primitive_intersectors.hpp>
 #include "happly/happly.h"
 
 typedef bvh::Bvh<float> bvh_t;
@@ -12,6 +14,8 @@ typedef bvh::Vector3<float> vector_t;
 typedef bvh::BoundingBox<float> bbox_t;
 typedef bvh::SweepSahBuilder<bvh_t> builder_t;
 typedef bvh_t::Node node_t;
+typedef bvh::SingleRayTraverser<bvh_t> traverser_t;
+typedef bvh::ClosestPrimitiveIntersector<bvh_t, triangle_t> primitive_intersector_t;
 
 float get_scaling_factor(const bvh_t &bvh, size_t quant_idx, int quant_num) {
     bbox_t quant_bbox = bvh.nodes[quant_idx].bounding_box_proxy().to_bounding_box();
@@ -72,8 +76,8 @@ bbox_t get_quant_bbox(const bvh_t &bvh, size_t node_idx, size_t quant_idx, int q
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 6) {
-        std::cerr << "usage: ./a.out MODEL_FILE QUANT_BITS T_TRV T_SWITCH T_IST" << std::endl;
+    if (argc < 6) {
+        std::cerr << "usage: ./a.out MODEL_FILE QUANT_BITS T_TRV T_SWITCH T_IST [RAY_FILE]" << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -87,6 +91,12 @@ int main(int argc, char *argv[]) {
     std::cout << "T_TRV = " << t_trv << std::endl;
     std::cout << "T_SWITCH = " << t_switch << std::endl;
     std::cout << "T_IST = " << t_ist << std::endl;
+
+    char *ray_file = nullptr;
+    if (argc >= 7) {
+        ray_file = argv[6];
+        std::cout << "RAY_FILE = " << ray_file << std::endl;
+    }
 
     happly::PLYData ply_data(model_file);
     std::vector<std::array<double, 3>> v_pos = ply_data.getVertexPositions();
@@ -291,6 +301,13 @@ int main(int argc, char *argv[]) {
         return cluster_area[l] > cluster_area[r];
     });
 
+    bvh_t quant_bvh;
+    quant_bvh.nodes = std::make_unique<node_t[]>(bvh.node_count);
+    quant_bvh.primitive_indices = std::make_unique<size_t[]>(triangles.size());
+    quant_bvh.node_count = bvh.node_count;
+    std::copy(bvh.primitive_indices.get(), bvh.primitive_indices.get() + triangles.size(),
+              quant_bvh.primitive_indices.get());
+
     std::ofstream cluster_size_fs("cluster_size.bin", std::ios::binary);
     std::ofstream bbox_fs("bbox.bin", std::ios::binary);
     std::ofstream quant_bbox_fs("quant_bbox.bin", std::ios::binary);
@@ -301,6 +318,9 @@ int main(int argc, char *argv[]) {
             for (float plane : bvh.nodes[idx].bounds)
                 bbox_fs.write((char*)(&plane), sizeof(plane));
             bbox_t quant_bbox = get_quant_bbox(bvh, idx, quant_indices[cluster_idx], quant_bits);
+            quant_bvh.nodes[idx].bounding_box_proxy() = quant_bbox;
+            quant_bvh.nodes[idx].primitive_count = bvh.nodes[idx].primitive_count;
+            quant_bvh.nodes[idx].first_child_or_primitive = bvh.nodes[idx].first_child_or_primitive;
             quant_bbox_fs.write((char*)(&quant_bbox.min[0]), sizeof(quant_bbox.min[0]));
             quant_bbox_fs.write((char*)(&quant_bbox.max[0]), sizeof(quant_bbox.max[0]));
             quant_bbox_fs.write((char*)(&quant_bbox.min[1]), sizeof(quant_bbox.min[1]));
@@ -309,4 +329,34 @@ int main(int argc, char *argv[]) {
             quant_bbox_fs.write((char*)(&quant_bbox.max[2]), sizeof(quant_bbox.max[2]));
         }
     }
+
+    if (ray_file == nullptr)
+        return 0;
+
+    std::cout << "traversing..." << std::endl;
+    traverser_t traverser(bvh);
+    traverser_t quant_traverser(quant_bvh);
+    primitive_intersector_t primitive_intersector(bvh, triangles.data());
+    primitive_intersector_t quant_primitive_intersector(quant_bvh, triangles.data());
+    traverser_t::Statistics statistics;
+    traverser_t::Statistics quant_statistics;
+    std::ifstream ray_fs(ray_file);
+    for (float r[7]; ray_fs.read((char*)r, 7 * sizeof(float)); ) {
+        bvh::Ray<float> ray(
+            bvh::Vector3<float>(r[0], r[1], r[2]),
+            bvh::Vector3<float>(r[3], r[4], r[5]),
+            0.f,
+            r[6]
+        );
+        auto result = traverser.traverse(ray, primitive_intersector, statistics);
+        auto quant_result = quant_traverser.traverse(ray, quant_primitive_intersector, quant_statistics);
+        if (result.has_value())
+            assert(quant_result.has_value() && quant_result->intersection.t <= result->intersection.t);
+        else
+            assert(!quant_result.has_value());
+    }
+    std::cout << "traversal_steps: " << statistics.traversal_steps << std::endl;
+    std::cout << "traversal_steps (quantized): " << quant_statistics.traversal_steps << std::endl;
+    std::cout << "intersections: " << statistics.intersections << std::endl;
+    std::cout << "intersections (quantized): " << quant_statistics.intersections << std::endl;
 }
