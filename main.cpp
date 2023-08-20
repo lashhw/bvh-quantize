@@ -1,7 +1,6 @@
 #include <iostream>
 #include <numeric>
 #include <vector>
-#include <unordered_map>
 #include <bvh/triangle.hpp>
 #include <bvh/bvh.hpp>
 #include <bvh/sweep_sah_builder.hpp>
@@ -528,9 +527,10 @@ int main(int argc, char *argv[]) {
     if (ray_file == nullptr)
         return 0;
 
-    std::unordered_map<size_t, int> cluster_map;
+    int cluster_map[bvh.node_count];
     float scaling_factors[cluster_indices.size()];
     std::array<int, 3> zero_points[cluster_indices.size()];
+    std::fill(cluster_map, cluster_map + bvh.node_count, -1);
     for (int i = 0; i < cluster_indices.size(); i++) {
         int quant_num = get_quant_num(quant_bits);
         for (int j = 0; j < cluster_indices[i].size(); j++)
@@ -538,6 +538,8 @@ int main(int argc, char *argv[]) {
         scaling_factors[i] = get_scaling_factor(bvh, quant_indices[i], quant_num);
         zero_points[i] = get_zero_point(bvh, quant_indices[i], scaling_factors[i]);
     }
+    for (int i = 0; i < bvh.node_count; i++)
+        assert(cluster_map[i] != -1);
 
     quant_node_t quant_nodes[bvh.node_count];
     for (int i = 0; i < bvh.node_count; i++) {
