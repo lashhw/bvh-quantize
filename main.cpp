@@ -269,8 +269,8 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 6) {
-        std::cerr << "usage: ./a.out MODEL_FILE QUANT_BITS T_TRV T_SWITCH T_IST [RAY_FILE]" << std::endl;
+    if (argc < 7) {
+        std::cerr << "usage: ./a.out MODEL_FILE QUANT_BITS T_TRV T_SWITCH T_IST SW [RAY_FILE]" << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -279,15 +279,17 @@ int main(int argc, char *argv[]) {
     float t_trv = std::stof(argv[3]);
     float t_switch = std::stof(argv[4]);
     float t_ist = std::stof(argv[5]);
+    float sw = std::stof(argv[6]);
     std::cout << "MODEL_FILE = " << model_file << std::endl;
     std::cout << "QUANT_BITS = " << quant_bits << std::endl;
     std::cout << "T_TRV = " << t_trv << std::endl;
     std::cout << "T_SWITCH = " << t_switch << std::endl;
     std::cout << "T_IST = " << t_ist << std::endl;
+    std::cout << "SW = " << sw << std::endl;
 
     char *ray_file = nullptr;
-    if (argc >= 7) {
-        ray_file = argv[6];
+    if (argc >= 8) {
+        ray_file = argv[7];
         std::cout << "RAY_FILE = " << ray_file << std::endl;
     }
 
@@ -569,7 +571,7 @@ int main(int argc, char *argv[]) {
         else
             assert(!quant_result.has_value());
 
-        auto int_result = int_traverse(ray, 0.01, int_statistics, bvh, triangles, quant_nodes,
+        auto int_result = int_traverse(ray, sw, int_statistics, bvh, triangles, quant_nodes,
                                        scaling_factors, zero_points, quant_bvh);
         if (result) {
             if (int_result &&
