@@ -167,7 +167,8 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
                                                   const quant_node_t* quant_nodes,
                                                   const float* scaling_factors,
                                                   const std::array<int, 3>* zero_points,
-                                                  const bvh_t& quant_bvh) {
+                                                  const bvh_t& quant_bvh,
+                                                  const int* cluster_map) {
     assert(ray.tmin == 0.0f);
 
     bvh::FastNodeIntersector<bvh_t> node_intersector(ray);
@@ -180,9 +181,21 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
         qw[i] = convert_to_int(1.0f / (ray.direction[i] * sw));
 
     std::optional<intersection_result_t> best_hit;
-    std::stack<size_t> stk;
-    size_t left_idx = bvh.nodes[0].first_child_or_primitive;
+    std::stack<size_t> cluster_stk;
+    std::stack<size_t> global_stk;
+    global_stk.push(bvh.nodes[0].first_child_or_primitive);
     while (true) {
+        size_t left_idx;
+        if (!cluster_stk.empty()) {
+            left_idx = cluster_stk.top();
+            cluster_stk.pop();
+        } else if (!global_stk.empty()) {
+            left_idx = global_stk.top();
+            global_stk.pop();
+        } else {
+            break;
+        }
+
         statistics.traversal_steps++;
 
         size_t right_idx = left_idx + 1;
@@ -251,16 +264,20 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
             if (right_hit) {
                 if (distance_left.first > distance_right.first)
                     std::swap(left_idx, right_idx);
-                stk.emplace(bvh.nodes[right_idx].first_child_or_primitive);
+                if (cluster_map[bvh.nodes[right_idx].first_child_or_primitive] == cluster_idx)
+                    cluster_stk.emplace(bvh.nodes[right_idx].first_child_or_primitive);
+                else
+                    global_stk.emplace(bvh.nodes[right_idx].first_child_or_primitive);
             }
-            left_idx = bvh.nodes[left_idx].first_child_or_primitive;
+            if (cluster_map[bvh.nodes[left_idx].first_child_or_primitive] == cluster_idx)
+                cluster_stk.emplace(bvh.nodes[left_idx].first_child_or_primitive);
+            else
+                global_stk.emplace(bvh.nodes[left_idx].first_child_or_primitive);
         } else if (right_hit) {
-            left_idx = bvh.nodes[right_idx].first_child_or_primitive;
-        } else {
-            if (stk.empty())
-                break;
-            left_idx = stk.top();
-            stk.pop();
+            if (cluster_map[bvh.nodes[right_idx].first_child_or_primitive] == cluster_idx)
+                cluster_stk.emplace(bvh.nodes[right_idx].first_child_or_primitive);
+            else
+                global_stk.emplace(bvh.nodes[right_idx].first_child_or_primitive);
         }
     }
 
@@ -574,7 +591,7 @@ int main(int argc, char *argv[]) {
             assert(!quant_result.has_value());
 
         auto int_result = int_traverse(ray, sw, int_statistics, bvh, triangles, quant_nodes,
-                                       scaling_factors, zero_points, quant_bvh);
+                                       scaling_factors, zero_points, quant_bvh, cluster_map);
         if (result) {
             if (int_result &&
                 result->primitive_index == int_result->triangle_idx &&
