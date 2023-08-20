@@ -151,14 +151,14 @@ std::pair<int, int> intersect_bbox(int qy_max,
     return ret;
 }
 
-int convert_to_int(double x) {
+int convert_to_int(float x) {
     assert(!std::isnan(x));
     if (x < -2147483648.0)
         return -2147483648;
     if (x >= 2147483648.0)
         return 2147483647;
     assert(x >= -2147483648.0 && x < 2147483648.0);
-    return (int)floor(x);
+    return (int)floorf(x);
 }
 
 std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
@@ -178,7 +178,7 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
 
     std::array<int, 3> qw{};
     for (int i = 0; i < 3; i++)
-        qw[i] = convert_to_int(1.0 / ((double)(ray.direction[i]) * (double)sw));
+        qw[i] = convert_to_int(1.0f / (ray.direction[i] * sw));
 
     std::optional<intersection_result_t> best_hit;
     std::stack<size_t> stk;
@@ -194,8 +194,8 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
         const std::array<int, 3>& zx = zero_points[cluster_idx];
         std::array<int, 3> qb{};
         for (int i = 0; i < 3; i++)
-            qb[i] = convert_to_int((double)(-ray.origin[i]) / ((double)(ray.direction[i]) * (double)sw * (double)sx));
-        int qy_max = convert_to_int((double)ray.tmax / ((double)sw * (double)sx));
+            qb[i] = convert_to_int(-ray.origin[i] / (ray.direction[i] * sw * sx));
+        int qy_max = convert_to_int(ray.tmax / (sw * sx));
 
         std::pair<int, int> distance_left = intersect_bbox(qy_max, qw, quant_nodes[left_idx].bounds, zx, qb);
         std::pair<int, int> distance_right = intersect_bbox(qy_max, qw, quant_nodes[right_idx].bounds, zx, qb);
