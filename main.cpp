@@ -37,6 +37,10 @@ int get_quant_num(int quant_bits) {
     return (1 << quant_bits) - 2;
 }
 
+enum policy_t {
+    STAY, SWITCH, FULL
+};
+
 float get_scaling_factor(const bvh_t &bvh, size_t quant_idx, int quant_num) {
     bbox_t quant_bbox = bvh.nodes[quant_idx].bounding_box_proxy().to_bounding_box();
 
@@ -59,7 +63,6 @@ std::array<int, 3> get_zero_point(const bvh_t &bvh, size_t quant_idx, float scal
     return ret;
 }
 
-// TODO: will double be better?
 // return: [Qxmin, Qxmax, Qymin, Qymax, Qzmin, Qzmax]
 std::array<int, 6> get_quant_val(const bvh_t &bvh, size_t node_idx, float scaling_factor, int quant_bits,
                                  const std::array<int, 3> &zero_point) {
@@ -269,26 +272,28 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
 
 int main(int argc, char *argv[]) {
     if (argc < 7) {
-        std::cerr << "usage: ./a.out MODEL_FILE QUANT_BITS T_TRV T_SWITCH T_IST SW [RAY_FILE]" << std::endl;
+        std::cerr << "usage: ./a.out MODEL_FILE QUANT_BITS T_TRV_FLOAT T_TRV_INT T_SWITCH T_IST SW [RAY_FILE]" << std::endl;
         exit(EXIT_FAILURE);
     }
 
     char *model_file = argv[1];
     int quant_bits = std::stoi(argv[2]);
-    float t_trv = std::stof(argv[3]);
-    float t_switch = std::stof(argv[4]);
-    float t_ist = std::stof(argv[5]);
-    float sw = std::stof(argv[6]);
+    float t_trv_float = std::stof(argv[3]);
+    float t_trv_int = std::stof(argv[4]);
+    float t_switch = std::stof(argv[5]);
+    float t_ist = std::stof(argv[6]);
+    float sw = std::stof(argv[7]);
     std::cout << "MODEL_FILE = " << model_file << std::endl;
     std::cout << "QUANT_BITS = " << quant_bits << std::endl;
-    std::cout << "T_TRV = " << t_trv << std::endl;
+    std::cout << "T_TRV_FLOAT = " << t_trv_float << std::endl;
+    std::cout << "T_TRV_INT = " << t_trv_int << std::endl;
     std::cout << "T_SWITCH = " << t_switch << std::endl;
     std::cout << "T_IST = " << t_ist << std::endl;
     std::cout << "SW = " << sw << std::endl;
 
     char *ray_file = nullptr;
-    if (argc >= 8) {
-        ray_file = argv[7];
+    if (argc >= 9) {
+        ray_file = argv[8];
         std::cout << "RAY_FILE = " << ray_file << std::endl;
     }
 
@@ -331,7 +336,7 @@ int main(int argc, char *argv[]) {
         stk_1.pop();
 
         t_buf_map[curr_idx] = t_buf_size;
-        t_buf_size += depth;
+        t_buf_size += depth + 1;
 
         if (!curr_node.is_leaf()) {
             size_t left_node_idx = curr_node.first_child_or_primitive;
@@ -345,7 +350,7 @@ int main(int argc, char *argv[]) {
     parent[root_left_node_idx] = 0;
     parent[root_right_node_idx] = 0;
     std::vector<float> t_buf(t_buf_size);
-    std::vector<char> t_stay(t_buf_size);
+    std::vector<policy_t> t_policy(t_buf_size);
     std::stack<std::pair<size_t, bool>> stk_2;
     stk_2.emplace(root_right_node_idx, true);
     stk_2.emplace(root_left_node_idx, true);
@@ -366,32 +371,56 @@ int main(int argc, char *argv[]) {
                 parent[right_node_idx] = curr_idx;
             }
         } else {
+            float left_switch_t = t_buf[t_buf_map[left_node_idx] + 1];
+            float right_switch_t = t_buf[t_buf_map[right_node_idx] + 1];
+
+            float left_full_t = t_buf[t_buf_map[left_node_idx]];
+            float right_full_t = t_buf[t_buf_map[right_node_idx]];
+
+            float &full_t_buf = t_buf[t_buf_map[curr_idx]];
+            policy_t &full_t_policy = t_policy[t_buf_map[curr_idx]];
+
+            float full_half_area = bvh.nodes[curr_idx].bounding_box_proxy().half_area();
+            full_t_buf = t_trv_float * 2 * full_half_area + left_full_t + right_full_t;
+            full_t_policy = FULL;
+
             size_t quant_idx = parent[curr_idx];
             for (int i = 0; ; i++) {
                 bbox_t quant_bbox = get_quant_bbox(bvh, curr_idx, quant_idx, quant_bits);
                 float half_area = quant_bbox.half_area();
 
-                float &curr_t_buf = t_buf[t_buf_map[curr_idx] + i];
-                char &curr_t_stay = t_stay[t_buf_map[curr_idx] + i];
+                float &curr_t_buf = t_buf[t_buf_map[curr_idx] + 1 + i];
+                policy_t &curr_t_policy = t_policy[t_buf_map[curr_idx] + 1 + i];
                 if (curr_node.is_leaf()) {
                     curr_t_buf = t_ist * (float)curr_node.primitive_count * half_area;
                 } else {
-                    float left_stay_t = t_buf[t_buf_map[left_node_idx] + 1 + i];
-                    float right_stay_t = t_buf[t_buf_map[right_node_idx] + 1 + i];
-                    float curr_stay_t = t_trv * 2 * half_area + left_stay_t + right_stay_t;
+                    float left_stay_t = t_buf[t_buf_map[left_node_idx] + 2 + i];
+                    float right_stay_t = t_buf[t_buf_map[right_node_idx] + 2 + i];
 
-                    float left_switch_t = t_buf[t_buf_map[left_node_idx]];
-                    float right_switch_t = t_buf[t_buf_map[right_node_idx]];
-                    float curr_switch_t = (t_trv * 2 + t_switch) * half_area + left_switch_t + right_switch_t;
+                    float curr_stay_t = t_trv_int * 2 * half_area + left_stay_t + right_stay_t;
+                    float curr_switch_t = (t_trv_int * 2 + t_switch) * half_area + left_switch_t + right_switch_t;
+                    float curr_full_t = t_trv_float * 2 * half_area + left_full_t + right_full_t;
 
                     assert(std::isfinite(curr_stay_t));
                     assert(std::isfinite(curr_switch_t));
-                    if (curr_stay_t < curr_switch_t) {
-                        curr_t_buf = curr_stay_t;
-                        curr_t_stay = true;
+                    assert(std::isfinite(curr_full_t));
+
+                    if (curr_full_t < curr_switch_t) {
+                        if (curr_full_t < curr_stay_t) {
+                            curr_t_buf = curr_full_t;
+                            curr_t_policy = FULL;
+                        } else {
+                            curr_t_buf = curr_stay_t;
+                            curr_t_policy = STAY;
+                        }
                     } else {
-                        curr_t_buf = curr_switch_t;
-                        curr_t_stay = false;
+                        if (curr_switch_t < curr_stay_t) {
+                            curr_t_buf = curr_switch_t;
+                            curr_t_policy = SWITCH;
+                        } else {
+                            curr_t_buf = curr_stay_t;
+                            curr_t_policy = STAY;
+                        }
                     }
                 }
 
@@ -403,11 +432,11 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    std::vector<bool> stay(bvh.node_count);
-    stay[0] = true;
+    std::vector<policy_t> policy(bvh.node_count);
+    policy[0] = STAY;
     std::stack<std::pair<size_t, int>> stk_3;
-    stk_3.emplace(root_right_node_idx, 0);
-    stk_3.emplace(root_left_node_idx, 0);
+    stk_3.emplace(root_right_node_idx, 1);
+    stk_3.emplace(root_left_node_idx, 1);
     while (!stk_3.empty()) {
         auto [curr_idx, curr_offset] = stk_3.top();
         node_t &curr_node = bvh.nodes[curr_idx];
@@ -419,14 +448,22 @@ int main(int argc, char *argv[]) {
         size_t left_node_idx = curr_node.first_child_or_primitive;
         size_t right_node_idx = left_node_idx + 1;
 
-        if (t_stay[t_buf_map[curr_idx] + curr_offset]) {
-            stay[curr_idx] = true;
-            stk_3.emplace(right_node_idx, 1 + curr_offset);
-            stk_3.emplace(left_node_idx, 1 + curr_offset);
-        } else {
-            stay[curr_idx] = false;
-            stk_3.emplace(right_node_idx, 0);
-            stk_3.emplace(left_node_idx, 0);
+        switch (t_policy[t_buf_map[curr_idx] + curr_offset]) {
+            case STAY:
+                policy[curr_idx] = STAY;
+                stk_3.emplace(right_node_idx, 1 + curr_offset);
+                stk_3.emplace(left_node_idx, 1 + curr_offset);
+                break;
+            case SWITCH:
+                policy[curr_idx] = SWITCH;
+                stk_3.emplace(right_node_idx, 1);
+                stk_3.emplace(left_node_idx, 1);
+                break;
+            case FULL:
+                policy[curr_idx] = FULL;
+                stk_3.emplace(right_node_idx, 0);
+                stk_3.emplace(left_node_idx, 0);
+                break;
         }
     }
 
@@ -440,10 +477,11 @@ int main(int argc, char *argv[]) {
     graph_fs << "    edge [arrowhead=none penwidth=0.5]\n";
     graph_fs << "    0 [shape=circle label=root]\n";
 
-    std::array<std::string, 2> cmap = {"black", "red"};
+    std::array<std::string, 3> cmap = {"black", "red", "blue"};
     int num_clusters = 1;
     std::vector<std::vector<size_t>> cluster_indices(1);
     std::vector<size_t> quant_indices{0};
+    std::vector<size_t> full_indices;
     std::queue<std::tuple<size_t, int, int, int>> que;
     que.emplace(0, 0, 0, 0);
     while (!que.empty()) {
@@ -451,7 +489,10 @@ int main(int argc, char *argv[]) {
         node_t &curr_node = bvh.nodes[curr_idx];
         que.pop();
 
-        cluster_indices[curr_cluster].push_back(curr_idx);
+        if (curr_cluster == -1)
+            full_indices.push_back(curr_idx);
+        else
+            cluster_indices[curr_cluster].push_back(curr_idx);
 
         if (!curr_node.is_leaf()) {
             size_t left_idx = curr_node.first_child_or_primitive;
@@ -459,14 +500,21 @@ int main(int argc, char *argv[]) {
 
             int child_color;
             int child_cluster;
-            if (stay[curr_idx]) {
-                child_color = curr_color;
-                child_cluster = curr_cluster;
-            } else {
-                child_color = (curr_color + 1) % 2;
-                child_cluster = num_clusters++;
-                cluster_indices.emplace_back();
-                quant_indices.push_back(curr_idx);
+            switch (policy[curr_idx]) {
+                case STAY:
+                    child_color = curr_color;
+                    child_cluster = curr_cluster;
+                    break;
+                case SWITCH:
+                    child_color = (curr_color + 1) % 2;
+                    child_cluster = num_clusters++;
+                    cluster_indices.emplace_back();
+                    quant_indices.push_back(curr_idx);
+                    break;
+                case FULL:
+                    child_color = 2;
+                    child_cluster = -1;
+                    break;
             }
 
             int child_depth = curr_depth + 1;
@@ -523,6 +571,10 @@ int main(int argc, char *argv[]) {
             quant_bbox_fs.write((char*)(&quant_bbox.max[2]), sizeof(quant_bbox.max[2]));
         }
     }
+
+    std::ofstream full_indices_fs("full_indices.bin", std::ios::binary);
+    for (const auto &idx : full_indices)
+        full_indices_fs.write((char*)(&idx), sizeof(idx));
 
     if (ray_file == nullptr)
         return 0;
