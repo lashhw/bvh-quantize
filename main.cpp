@@ -637,14 +637,14 @@ int main(int argc, char *argv[]) {
 
         auto int_result = int_traverse(ray, sw, int_statistics, bvh, triangles, quant_nodes,
                                        scaling_factors, zero_points, quant_bvh);
-        if (result) {
-            if (int_result &&
+        if (result.has_value()) {
+            if (int_result.has_value() &&
                 result->primitive_index == int_result->triangle_idx &&
                 result->intersection.t == int_result->intersection.t &&
                 result->intersection.u == int_result->intersection.u &&
                 result->intersection.v == int_result->intersection.v)
                 correct_rays++;
-        } else if (!int_result) {
+        } else if (!int_result.has_value()) {
             correct_rays++;
         }
     }
