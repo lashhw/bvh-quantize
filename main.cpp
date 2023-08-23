@@ -601,9 +601,13 @@ int main(int argc, char *argv[]) {
 
     quant_node_t quant_nodes[bvh.node_count];
     for (int i = 0; i < bvh.node_count; i++) {
-        quant_nodes[i].bounds = get_quant_val(bvh, i, scaling_factors[cluster_map[i]],
-                                              quant_bits, zero_points[cluster_map[i]]);
-        quant_nodes[i].cluster_idx = cluster_map[i];
+        if (cluster_map[i] == -1) {
+            quant_nodes[i].cluster_idx = -1;
+        } else {
+            quant_nodes[i].bounds = get_quant_val(bvh, i, scaling_factors[cluster_map[i]],
+                                                  quant_bits, zero_points[cluster_map[i]]);
+            quant_nodes[i].cluster_idx = cluster_map[i];
+        }
     }
 
     std::cout << "traversing..." << std::endl;
