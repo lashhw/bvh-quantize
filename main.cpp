@@ -41,6 +41,26 @@ enum policy_t {
     STAY, SWITCH, FULL
 };
 
+int floor_to_int(float x) {
+    assert(!std::isnan(x));
+    if (x < -2147483648.0f)
+        return -2147483648;
+    if (x >= 2147483648.0f)
+        return 2147483647;
+    assert(x >= -2147483648.0f && x < 2147483648.0f);
+    return (int)floorf(x);
+}
+
+int ceil_to_int(float x) {
+    assert(!std::isnan(x));
+    if (x <= -2147483649.0f)
+        return -2147483648;
+    if (x > 2147483647.0f)
+        return 2147483647;
+    assert(x > -2147483649.0f && x <= 2147483647.0f);
+    return (int)ceilf(x);
+}
+
 float get_scaling_factor(const bvh_t &bvh, size_t quant_idx, int quant_num) {
     bbox_t quant_bbox = bvh.nodes[quant_idx].bounding_box_proxy().to_bounding_box();
 
@@ -59,7 +79,7 @@ std::array<int, 3> get_zero_point(const bvh_t &bvh, size_t quant_idx, float scal
 
     std::array<int, 3> ret{};
     for (int i = 0; i < 3; i++)
-        ret[i] = (int)floorf(quant_bbox.min[i] / scaling_factor);
+        ret[i] = floor_to_int(quant_bbox.min[i] / scaling_factor);
     return ret;
 }
 
@@ -70,8 +90,8 @@ std::array<int, 6> get_quant_val(const bvh_t &bvh, size_t node_idx, float scalin
 
     std::array<int, 6> ret{};
     for (int i = 0; i < 3; i++) {
-        ret[i * 2] = (int)floorf(node_bbox.min[i] / scaling_factor) - zero_point[i];
-        ret[i * 2 + 1] = (int)ceilf(node_bbox.max[i] / scaling_factor) - zero_point[i];
+        ret[i * 2] = floor_to_int(node_bbox.min[i] / scaling_factor) - zero_point[i];
+        ret[i * 2 + 1] = ceil_to_int(node_bbox.max[i] / scaling_factor) - zero_point[i];
         int max_q = (1 << quant_bits);
         assert(0 <= ret[i * 2] && ret[i * 2] <= max_q);
         assert(0 <= ret[i * 2 + 1] && ret[i * 2 + 1] <= max_q);
@@ -151,16 +171,6 @@ std::pair<int, int> intersect_bbox(int qy_max,
     ret.first = std::max(entry[0], std::max(entry[1], std::max(entry[2], 0)));
     ret.second = std::min(exit[0], std::min(exit[1], std::min(exit[2], qy_max)));
     return ret;
-}
-
-int convert_to_int(float x) {
-    assert(!std::isnan(x));
-    if (x < -2147483648.0)
-        return -2147483648;
-    if (x >= 2147483648.0)
-        return 2147483647;
-    assert(x >= -2147483648.0 && x < 2147483648.0);
-    return (int)floorf(x);
 }
 
 std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
