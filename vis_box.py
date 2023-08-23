@@ -13,10 +13,11 @@ cluster_size = np.fromfile('cluster_size.bin', np.uint32)
 cluster_sum = np.r_[0, np.cumsum(cluster_size)]
 bbox = np.fromfile('bbox.bin', np.float32).reshape(-1, 6)
 quant_bbox = np.fromfile('quant_bbox.bin', np.float32).reshape(-1, 6)
+full_bbox = np.fromfile('full_bbox.bin', np.float32).reshape(-1, 6)
 
 cluster_idx = 0
 quant_actor = None
-def click_callback(pos):
+def draw_quant_bbox():
     global cluster_idx
     global quant_actor
     p.clear()
@@ -30,6 +31,24 @@ def click_callback(pos):
     quant_actor = p.add_mesh(quant_box_mesh, color='green', style='wireframe')
     cluster_idx += 1
     p.add_text(f'{cluster_idx}/{len(cluster_size)}')
+
+def draw_full_bbox():
+    p.clear()
+    p.add_mesh(ply_mesh, style='wireframe')
+    box_mesh = pv.PolyData()
+    for b in full_bbox:
+        box_mesh += pv.Box(b)
+    p.add_mesh(box_mesh, color='blue', style='wireframe')
+    p.add_text(f'full_bbox: {full_bbox.shape[0]}')
+
+first = True
+def click_callback(pos):
+    global first
+    if first:
+        draw_full_bbox()
+    else:
+        draw_quant_bbox()
+    first = False
 
 def keyboard_callback():
     quant_actor.visibility = not quant_actor.visibility
