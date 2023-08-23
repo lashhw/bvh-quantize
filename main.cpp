@@ -579,9 +579,10 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    std::ofstream full_indices_fs("full_indices.bin", std::ios::binary);
+    std::ofstream full_bbox_fs("full_bbox.bin", std::ios::binary);
     for (const auto &idx : full_indices)
-        full_indices_fs.write((char*)(&idx), sizeof(idx));
+        for (float plane : bvh.nodes[idx].bounds)
+            full_bbox_fs.write((char*)(&plane), sizeof(plane));
 
     if (ray_file == nullptr)
         return 0;
