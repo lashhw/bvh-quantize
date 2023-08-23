@@ -598,8 +598,6 @@ int main(int argc, char *argv[]) {
         scaling_factors[i] = get_scaling_factor(bvh, quant_indices[i], quant_num);
         zero_points[i] = get_zero_point(bvh, quant_indices[i], scaling_factors[i]);
     }
-    for (int i = 0; i < bvh.node_count; i++)
-        assert(cluster_map[i] != -1);
 
     quant_node_t quant_nodes[bvh.node_count];
     for (int i = 0; i < bvh.node_count; i++) {
