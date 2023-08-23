@@ -36,8 +36,8 @@ def draw_full_bbox():
     p.clear()
     p.add_mesh(ply_mesh, style='wireframe')
     box_mesh = pv.PolyData()
-    for b in full_bbox:
-        box_mesh += pv.Box(b)
+    for i in range(full_bbox.shape[0]):
+        box_mesh += pv.Box(full_bbox[i])
     p.add_mesh(box_mesh, color='blue', style='wireframe')
     p.add_text(f'full_bbox: {full_bbox.shape[0]}')
 
