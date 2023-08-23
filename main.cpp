@@ -190,7 +190,7 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
 
     std::array<int, 3> qw{};
     for (int i = 0; i < 3; i++)
-        qw[i] = convert_to_int(1.0f / (ray.direction[i] * sw));
+        qw[i] = ceil_to_int(1.0f / (ray.direction[i] * sw));
 
     std::optional<intersection_result_t> best_hit;
     std::stack<size_t> stk;
@@ -206,8 +206,8 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
         const std::array<int, 3>& zx = zero_points[cluster_idx];
         std::array<int, 3> qb{};
         for (int i = 0; i < 3; i++)
-            qb[i] = convert_to_int(-ray.origin[i] / (ray.direction[i] * sw * sx));
-        int qy_max = convert_to_int(ray.tmax / (sw * sx));
+            qb[i] = ceil_to_int(-ray.origin[i] / (ray.direction[i] * sw * sx));
+        int qy_max = ceil_to_int(ray.tmax / (sw * sx));
 
         std::pair<int, int> distance_left = intersect_bbox(qy_max, qw, quant_nodes[left_idx].bounds, zx, qb);
         std::pair<int, int> distance_right = intersect_bbox(qy_max, qw, quant_nodes[right_idx].bounds, zx, qb);
