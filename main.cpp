@@ -391,9 +391,14 @@ int main(int argc, char *argv[]) {
             float &full_t_buf = t_buf[t_buf_map[curr_idx]];
             policy_t &full_t_policy = t_policy[t_buf_map[curr_idx]];
 
+            // fill t*
             float full_half_area = bvh.nodes[curr_idx].bounding_box_proxy().half_area();
-            full_t_buf = t_trv_float * 2 * full_half_area + left_full_t + right_full_t;
-            full_t_policy = FULL;
+            if (curr_node.is_leaf()) {
+                full_t_buf = t_ist * (float)curr_node.primitive_count * full_half_area;
+            } else {
+                full_t_buf = t_trv_float * 2 * full_half_area + left_full_t + right_full_t;
+                full_t_policy = FULL;
+            }
 
             size_t quant_idx = parent[curr_idx];
             for (int i = 1; ; i++) {
