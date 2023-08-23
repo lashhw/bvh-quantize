@@ -207,7 +207,7 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
         std::array<int, 3> qb{};
         for (int i = 0; i < 3; i++)
             qb[i] = floor_to_int(-ray.origin[i] / (ray.direction[i] * sw * sx));
-        int qy_max = floor_to_int(ray.tmax / (sw * sx));
+        int qy_max = ceil_to_int(ray.tmax / (sw * sx));
 
         std::pair<int, int> distance_left = intersect_bbox(qy_max, qw, quant_nodes[left_idx].bounds, zx, qb);
         std::pair<int, int> distance_right = intersect_bbox(qy_max, qw, quant_nodes[right_idx].bounds, zx, qb);
