@@ -580,9 +580,13 @@ int main(int argc, char *argv[]) {
     }
 
     std::ofstream full_bbox_fs("full_bbox.bin", std::ios::binary);
-    for (const auto &idx : full_indices)
+    for (const auto &idx : full_indices) {
+        quant_bvh.nodes[idx].bounding_box_proxy() = bvh.nodes[idx].bounding_box_proxy().to_bounding_box();
+        quant_bvh.nodes[idx].primitive_count = bvh.nodes[idx].primitive_count;
+        quant_bvh.nodes[idx].first_child_or_primitive = bvh.nodes[idx].first_child_or_primitive;
         for (float plane : bvh.nodes[idx].bounds)
             full_bbox_fs.write((char*)(&plane), sizeof(plane));
+    }
 
     if (ray_file == nullptr)
         return 0;
