@@ -623,8 +623,8 @@ int main(int argc, char *argv[]) {
     std::ifstream ray_fs(ray_file);
     for (float r[7]; ray_fs.read((char*)r, 7 * sizeof(float)); total_rays++) {
         ray_t ray(
-            bvh::Vector3<float>(r[0], r[1], r[2]),
-            bvh::Vector3<float>(r[3], r[4], r[5]),
+            vector_t(r[0], r[1], r[2]),
+            vector_t(r[3], r[4], r[5]),
             0.f,
             r[6]
         );
