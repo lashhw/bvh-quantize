@@ -282,7 +282,8 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
 
 int main(int argc, char *argv[]) {
     if (argc < 8) {
-        std::cerr << "usage: ./a.out MODEL_FILE QUANT_BITS T_TRV_FLOAT T_TRV_INT T_SWITCH T_IST SW [RAY_FILE]" << std::endl;
+        std::cerr << "usage: " << argv[0] <<
+            " MODEL_FILE QUANT_BITS T_TRV_FLOAT T_TRV_INT T_SWITCH T_IST SW [RAY_FILE]" << std::endl;
         exit(EXIT_FAILURE);
     }
 
