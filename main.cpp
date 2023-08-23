@@ -396,17 +396,17 @@ int main(int argc, char *argv[]) {
             full_t_policy = FULL;
 
             size_t quant_idx = parent[curr_idx];
-            for (int i = 0; ; i++) {
+            for (int i = 1; ; i++) {
                 bbox_t quant_bbox = get_quant_bbox(bvh, curr_idx, quant_idx, quant_bits);
                 float half_area = quant_bbox.half_area();
 
-                float &curr_t_buf = t_buf[t_buf_map[curr_idx] + 1 + i];
-                policy_t &curr_t_policy = t_policy[t_buf_map[curr_idx] + 1 + i];
+                float &curr_t_buf = t_buf[t_buf_map[curr_idx] + i];
+                policy_t &curr_t_policy = t_policy[t_buf_map[curr_idx] + i];
                 if (curr_node.is_leaf()) {
                     curr_t_buf = t_ist * (float)curr_node.primitive_count * half_area;
                 } else {
-                    float left_stay_t = t_buf[t_buf_map[left_node_idx] + 2 + i];
-                    float right_stay_t = t_buf[t_buf_map[right_node_idx] + 2 + i];
+                    float left_stay_t = t_buf[t_buf_map[left_node_idx] + 1 + i];
+                    float right_stay_t = t_buf[t_buf_map[right_node_idx] + 1 + i];
 
                     float curr_stay_t = t_trv_int * 2 * half_area + left_stay_t + right_stay_t;
                     float curr_switch_t = (t_trv_int * 2 + t_switch) * half_area + left_switch_t + right_switch_t;
