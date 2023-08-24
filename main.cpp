@@ -455,11 +455,25 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    float root_left_switch_t = t_buf[t_buf_map[root_left_node_idx] + 1];
+    float root_right_switch_t = t_buf[t_buf_map[root_right_node_idx] + 1];
+    float root_left_full_t = t_buf[t_buf_map[root_left_node_idx]];
+    float root_right_full_t = t_buf[t_buf_map[root_right_node_idx]];
+    float root_half_area = bvh.nodes[0].bounding_box_proxy().to_bounding_box().half_area();
+    float root_switch_t = (t_trv_int * 2 + t_switch) * root_half_area + root_left_switch_t + root_right_switch_t;
+    float root_full_t = t_trv_float * 2 * root_half_area + root_left_full_t + root_right_full_t;
+
     std::vector<policy_t> policy(bvh.node_count);
-    policy[0] = STAY;
     std::stack<std::pair<size_t, int>> stk_3;
-    stk_3.emplace(root_right_node_idx, 1);
-    stk_3.emplace(root_left_node_idx, 1);
+    if (root_switch_t < root_full_t) {
+        policy[0] = SWITCH;
+        stk_3.emplace(root_right_node_idx, 1);
+        stk_3.emplace(root_left_node_idx, 1);
+    } else {
+        policy[0] = FULL;
+        stk_3.emplace(root_right_node_idx, 0);
+        stk_3.emplace(root_left_node_idx, 0);
+    }
     while (!stk_3.empty()) {
         auto [curr_idx, curr_offset] = stk_3.top();
         node_t &curr_node = bvh.nodes[curr_idx];
@@ -501,12 +515,12 @@ int main(int argc, char *argv[]) {
     graph_fs << "    0 [shape=circle label=root]\n";
 
     std::array<std::string, 3> cmap = {"black", "red", "green"};
-    int num_clusters = 1;
-    std::vector<std::vector<size_t>> cluster_indices(1);
-    std::vector<size_t> quant_indices{0};
+    int num_clusters = 0;
+    std::vector<std::vector<size_t>> cluster_indices;
+    std::vector<size_t> quant_indices;
     std::vector<size_t> full_indices;
     std::queue<std::tuple<size_t, int, int, int>> que;
-    que.emplace(0, 0, 0, 0);
+    que.emplace(0, 0, -1, 0);
     while (!que.empty()) {
         auto [curr_idx, curr_color, curr_cluster, curr_depth] = que.front();
         node_t &curr_node = bvh.nodes[curr_idx];
