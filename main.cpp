@@ -593,6 +593,15 @@ int main(int argc, char *argv[]) {
             full_bbox_fs.write((char*)(&plane), sizeof(plane));
     }
 
+    size_t num_quant_bbox = 0;
+    for (const auto &x : cluster_indices)
+        num_quant_bbox += x.size();
+    std::cout << "# of clusters: " << cluster_indices.size() << std::endl;
+    std::cout << "# of bboxes: " << bvh.node_count << std::endl;
+    std::cout << "# of full bboxes: " << full_indices.size() << std::endl;
+    std::cout << "# of quantized bboxes: " << num_quant_bbox << std::endl;
+    assert(bvh.node_count == full_indices.size() + num_quant_bbox);
+
     if (ray_file == nullptr)
         return 0;
 
