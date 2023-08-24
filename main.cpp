@@ -396,8 +396,15 @@ int main(int argc, char *argv[]) {
             if (curr_node.is_leaf()) {
                 full_t_buf = t_ist * (float)curr_node.primitive_count * full_half_area;
             } else {
-                full_t_buf = t_trv_float * 2 * full_half_area + left_full_t + right_full_t;
-                full_t_policy = FULL;
+                float curr_full_t = t_trv_float * 2 * full_half_area + left_full_t + right_full_t;
+                float curr_switch_t = (t_trv_int * 2 + t_switch) * full_half_area + left_switch_t + right_switch_t;
+                if (curr_full_t < curr_switch_t) {
+                    full_t_buf = curr_full_t;
+                    full_t_policy = FULL;
+                } else {
+                    full_t_buf = curr_switch_t;
+                    full_t_policy = SWITCH;
+                }
             }
 
             size_t quant_idx = parent[curr_idx];
@@ -493,7 +500,7 @@ int main(int argc, char *argv[]) {
     graph_fs << "    edge [arrowhead=none penwidth=0.5]\n";
     graph_fs << "    0 [shape=circle label=root]\n";
 
-    std::array<std::string, 3> cmap = {"black", "red", "blue"};
+    std::array<std::string, 3> cmap = {"black", "red", "green"};
     int num_clusters = 1;
     std::vector<std::vector<size_t>> cluster_indices(1);
     std::vector<size_t> quant_indices{0};
