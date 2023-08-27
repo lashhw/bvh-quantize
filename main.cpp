@@ -669,14 +669,17 @@ int main(int argc, char *argv[]) {
             0.f,
             r[6]
         );
-        auto result = traverser.traverse(ray, primitive_intersector, statistics);
-        auto quant_result = quant_traverser.traverse(ray, quant_primitive_intersector, quant_statistics);
+        ray_t ray_ = ray;
+        auto result = traverser.traverse(ray_, primitive_intersector, statistics);
+        ray_ = ray;
+        auto quant_result = quant_traverser.traverse(ray_, quant_primitive_intersector, quant_statistics);
         if (result.has_value())
             assert(quant_result.has_value() && quant_result->intersection.t <= result->intersection.t);
         else
             assert(!quant_result.has_value());
 
-        auto int_result = int_traverse(ray, sw, int_statistics, bvh, triangles, quant_nodes,
+        ray_ = ray;
+        auto int_result = int_traverse(ray_, sw, int_statistics, bvh, triangles, quant_nodes,
                                        scaling_factors, zero_points, quant_bvh);
         if (result.has_value()) {
             if (int_result.has_value() &&
