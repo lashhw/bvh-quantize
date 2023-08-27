@@ -200,6 +200,7 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
 
         size_t right_idx = left_idx + 1;
         int cluster_idx = quant_nodes[left_idx].cluster_idx;
+        assert(cluster_idx != -1);
         assert(cluster_idx == quant_nodes[right_idx].cluster_idx);
 
         const float& sx = scaling_factors[cluster_idx];
