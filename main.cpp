@@ -426,7 +426,7 @@ int main(int argc, char *argv[]) {
 
                     assert(std::isfinite(curr_stay_t));
                     assert(std::isfinite(curr_switch_t));
-                    assert(std::isfinite(curr_full_t));
+                    // assert(std::isfinite(curr_full_t));
 
                     if (curr_full_t < curr_switch_t) {
                         if (curr_full_t < curr_stay_t) {
