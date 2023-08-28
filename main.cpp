@@ -134,7 +134,6 @@ std::optional<intersection_result_t> intersect_leaf(ray_t& ray, size_t node_idx,
 std::pair<int, int> intersect_bbox(int qy_max,
                                    const std::array<int, 3>& qw,
                                    const std::array<int, 6>& qx,
-                                   const std::array<int, 3>& zx,
                                    const std::array<int, 3>& qb) {
     const int& qx_x_a = qw[0] < 0 ? qx[1] : qx[0];
     const int& qx_x_b = qw[0] < 0 ? qx[0] : qx[1];
@@ -143,21 +142,14 @@ std::pair<int, int> intersect_bbox(int qy_max,
     const int& qx_z_a = qw[2] < 0 ? qx[5] : qx[4];
     const int& qx_z_b = qw[2] < 0 ? qx[4] : qx[5];
 
-    int qxz_x_a = qx_x_a + zx[0];
-    int qxz_x_b = qx_x_b + zx[0];
-    int qxz_y_a = qx_y_a + zx[1];
-    int qxz_y_b = qx_y_b + zx[1];
-    int qxz_z_a = qx_z_a + zx[2];
-    int qxz_z_b = qx_z_b + zx[2];
-
     int entry[3];
     int exit[3];
-    entry[0] = std::min(qw[0] * qxz_x_a, (qw[0] + 1) * qxz_x_a) + qb[0];
-    entry[1] = std::min(qw[1] * qxz_y_a, (qw[1] + 1) * qxz_y_a) + qb[1];
-    entry[2] = std::min(qw[2] * qxz_z_a, (qw[2] + 1) * qxz_z_a) + qb[2];
-    exit[0] = std::max(qw[0] * qxz_x_b, (qw[0] + 1) * qxz_x_b) + (qb[0] + 1);
-    exit[1] = std::max(qw[1] * qxz_y_b, (qw[1] + 1) * qxz_y_b) + (qb[1] + 1);
-    exit[2] = std::max(qw[2] * qxz_z_b, (qw[2] + 1) * qxz_z_b) + (qb[2] + 1);
+    entry[0] = std::min(qw[0] * qx_x_a, (qw[0] + 1) * qx_x_a) + qb[0];
+    entry[1] = std::min(qw[1] * qx_y_a, (qw[1] + 1) * qx_y_a) + qb[1];
+    entry[2] = std::min(qw[2] * qx_z_a, (qw[2] + 1) * qx_z_a) + qb[2];
+    exit[0] = std::max(qw[0] * qx_x_b, (qw[0] + 1) * qx_x_b) + (qb[0] + 1);
+    exit[1] = std::max(qw[1] * qx_y_b, (qw[1] + 1) * qx_y_b) + (qb[1] + 1);
+    exit[2] = std::max(qw[2] * qx_z_b, (qw[2] + 1) * qx_z_b) + (qb[2] + 1);
 
     std::pair<int, int> ret;
     ret.first = std::max(entry[0], std::max(entry[1], std::max(entry[2], 0)));
@@ -171,8 +163,7 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
                                                   const std::vector<triangle_t>& triangles,
                                                   const quant_node_t* quant_nodes,
                                                   const float* scaling_factors,
-                                                  const std::array<int, 3>* zero_points,
-                                                  const bvh_t& quant_bvh) {
+                                                  const std::vector<size_t>& quant_indices) {
     assert(ray.tmin == 0.0f);
 
     bvh::FastNodeIntersector<bvh_t> node_intersector(ray);
@@ -186,9 +177,12 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
 
     std::optional<intersection_result_t> best_hit;
     std::stack<size_t> stk;
-    size_t left_idx = bvh.nodes[0].first_child_or_primitive;
-    while (true) {
+    stk.push(bvh.nodes[0].first_child_or_primitive);
+    while (!stk.empty()) {
         statistics.traversal_steps++;
+
+        size_t left_idx = stk.top();
+        stk.pop();
 
         size_t right_idx = left_idx + 1;
         int cluster_idx = quant_nodes[left_idx].cluster_idx;
@@ -196,41 +190,26 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
         assert(cluster_idx == quant_nodes[right_idx].cluster_idx);
 
         const float& sx = scaling_factors[cluster_idx];
-        const std::array<int, 3>& zx = zero_points[cluster_idx];
+        size_t quant_idx = quant_indices[cluster_idx];
+
+        std::pair<float, float> y_quant_pair = node_intersector.intersect(bvh.nodes[quant_idx], ray);
+        if (y_quant_pair.first > y_quant_pair.second)
+            continue;
+        float y_quant = y_quant_pair.first;
+
+        bbox_t quant_bbox = bvh.nodes[quant_idx].bounding_box_proxy().to_bounding_box();
+        std::array<float, 3> o_local = {
+            ray.origin[0] + y_quant * ray.direction[0] - quant_bbox.min[0],
+            ray.origin[1] + y_quant * ray.direction[1] - quant_bbox.min[1],
+            ray.origin[2] + y_quant * ray.direction[2] - quant_bbox.min[2]
+        };
         std::array<int, 3> qb{};
         for (int i = 0; i < 3; i++)
-            qb[i] = floor_to_int(-ray.origin[i] / (ray.direction[i] * sw * sx));
-        int qy_max = ceil_to_int(ray.tmax / (sw * sx));
+            qb[i] = floor_to_int(-o_local[i] / (ray.direction[i] * sw * sx));
+        int qy_max = ceil_to_int((ray.tmax - y_quant) / (sw * sx));
 
-        std::pair<int, int> distance_left = intersect_bbox(qy_max, qw, quant_nodes[left_idx].bounds, zx, qb);
-        std::pair<int, int> distance_right = intersect_bbox(qy_max, qw, quant_nodes[right_idx].bounds, zx, qb);
-
-        std::pair<float, float> ref_distance_left = node_intersector.intersect(quant_bvh.nodes[left_idx], ray);
-        std::pair<float, float> ref_distance_right = node_intersector.intersect(quant_bvh.nodes[right_idx], ray);
-
-        if (ref_distance_left.first <= ref_distance_left.second) {
-            if (distance_left.first > distance_left.second)
-                error++;
-            else
-                exact++;
-        } else {
-            if (distance_left.first <= distance_left.second)
-                redundant++;
-            else
-                exact++;
-        }
-
-        if (ref_distance_right.first <= ref_distance_right.second) {
-            if (distance_right.first > distance_right.second)
-                error++;
-            else
-                exact++;
-        } else {
-            if (distance_right.first <= distance_right.second)
-                redundant++;
-            else
-                exact++;
-        }
+        std::pair<int, int> distance_left = intersect_bbox(qy_max, qw, quant_nodes[left_idx].bounds, qb);
+        std::pair<int, int> distance_right = intersect_bbox(qy_max, qw, quant_nodes[right_idx].bounds, qb);
 
         bool left_hit = false;
         bool right_hit = false;
@@ -259,14 +238,9 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
                     std::swap(left_idx, right_idx);
                 stk.emplace(bvh.nodes[right_idx].first_child_or_primitive);
             }
-            left_idx = bvh.nodes[left_idx].first_child_or_primitive;
+            stk.emplace(bvh.nodes[left_idx].first_child_or_primitive);
         } else if (right_hit) {
-            left_idx = bvh.nodes[right_idx].first_child_or_primitive;
-        } else {
-            if (stk.empty())
-                break;
-            left_idx = stk.top();
-            stk.pop();
+            stk.emplace(bvh.nodes[right_idx].first_child_or_primitive);
         }
     }
 
@@ -621,17 +595,14 @@ int main(int argc, char *argv[]) {
     if (ray_file == nullptr)
         return 0;
 
-    /*
     int cluster_map[bvh.node_count];
     float scaling_factors[cluster_indices.size()];
-    std::array<int, 3> zero_points[cluster_indices.size()];
     std::fill(cluster_map, cluster_map + bvh.node_count, -1);
     for (int i = 0; i < cluster_indices.size(); i++) {
         int quant_num = get_quant_num(quant_bits);
         for (int j = 0; j < cluster_indices[i].size(); j++)
             cluster_map[cluster_indices[i][j]] = i;
         scaling_factors[i] = get_scaling_factor(bvh, quant_indices[i], quant_num);
-        zero_points[i] = get_zero_point(bvh, quant_indices[i], scaling_factors[i]);
     }
 
     quant_node_t quant_nodes[bvh.node_count];
@@ -639,12 +610,11 @@ int main(int argc, char *argv[]) {
         if (cluster_map[i] == -1) {
             quant_nodes[i].cluster_idx = -1;
         } else {
-            quant_nodes[i].bounds = get_quant_val(bvh, i, scaling_factors[cluster_map[i]],
-                                                  quant_bits, zero_points[cluster_map[i]]);
+            quant_nodes[i].bounds = get_quant_val(bvh, i, quant_indices[cluster_map[i]],
+                                                  scaling_factors[cluster_map[i]], quant_bits);
             quant_nodes[i].cluster_idx = cluster_map[i];
         }
     }
-     */
 
     std::cout << "traversing..." << std::endl;
     traverser_t traverser(bvh);
@@ -673,10 +643,9 @@ int main(int argc, char *argv[]) {
         else
             assert(!quant_result.has_value());
 
-        /*
         ray_ = ray;
         auto int_result = int_traverse(ray_, sw, int_statistics, bvh, triangles, quant_nodes,
-                                       scaling_factors, zero_points, quant_bvh);
+                                       scaling_factors, quant_indices);
         if (result.has_value()) {
             if (int_result.has_value() &&
                 result->primitive_index == int_result->triangle_idx &&
@@ -687,7 +656,6 @@ int main(int argc, char *argv[]) {
         } else if (!int_result.has_value()) {
             correct_rays++;
         }
-         */
     }
     std::cout << "traversal_steps: " << statistics.traversal_steps << std::endl;
     std::cout << "traversal_steps (quantized): " << quant_statistics.traversal_steps << std::endl;
