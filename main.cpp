@@ -168,9 +168,6 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
     assert(ray.tmin == 0.0f);
 
     bvh::FastNodeIntersector<bvh_t> node_intersector(ray);
-    intmax_t exact = 0;
-    intmax_t redundant = 0;
-    intmax_t error = 0;
 
     std::array<int, 3> qw{};
     for (int i = 0; i < 3; i++)
