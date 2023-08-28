@@ -84,6 +84,7 @@ std::array<int, 6> get_quant_val(const bvh_t &bvh, size_t node_idx, size_t quant
         ret[i * 2] = floor_to_int((node_bbox.min[i] - quant_bbox.min[i]) / scaling_factor);
         ret[i * 2 + 1] = ceil_to_int((node_bbox.max[i] - quant_bbox.min[i]) / scaling_factor);
         int max_q = (1 << quant_bits);
+        // TODO: use double to prevent error
         assert(0 <= ret[i * 2] && ret[i * 2] <= max_q);
         assert(0 <= ret[i * 2 + 1] && ret[i * 2 + 1] <= max_q);
         if (ret[i * 2] == max_q)
