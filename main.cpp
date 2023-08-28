@@ -432,14 +432,14 @@ int main(int argc, char *argv[]) {
 
     std::vector<policy_t> policy(bvh.node_count);
     std::stack<std::pair<size_t, int>> stk_3;
-    if (root_switch_t < root_full_t) {
-        policy[0] = SWITCH;
-        stk_3.emplace(root_right_node_idx, 1);
-        stk_3.emplace(root_left_node_idx, 1);
-    } else {
+    if (root_full_t < root_switch_t) {
         policy[0] = FULL;
         stk_3.emplace(root_right_node_idx, 0);
         stk_3.emplace(root_left_node_idx, 0);
+    } else {
+        policy[0] = SWITCH;
+        stk_3.emplace(root_right_node_idx, 1);
+        stk_3.emplace(root_left_node_idx, 1);
     }
     while (!stk_3.empty()) {
         auto [curr_idx, curr_offset] = stk_3.top();
