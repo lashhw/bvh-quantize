@@ -34,7 +34,7 @@ struct int_statistics_t {
 };
 
 int get_quant_num(int quant_bits) {
-    return (1 << quant_bits) - 2;
+    return (1 << quant_bits) - 1;
 }
 
 enum policy_t {
@@ -73,25 +73,16 @@ float get_scaling_factor(const bvh_t &bvh, size_t quant_idx, int quant_num) {
     return scaling_factor;
 }
 
-// return: [Zx, Zy, Zz]
-std::array<int, 3> get_zero_point(const bvh_t &bvh, size_t quant_idx, float scaling_factor) {
-    bbox_t quant_bbox = bvh.nodes[quant_idx].bounding_box_proxy().to_bounding_box();
-
-    std::array<int, 3> ret{};
-    for (int i = 0; i < 3; i++)
-        ret[i] = floor_to_int(quant_bbox.min[i] / scaling_factor);
-    return ret;
-}
-
 // return: [Qxmin, Qxmax, Qymin, Qymax, Qzmin, Qzmax]
-std::array<int, 6> get_quant_val(const bvh_t &bvh, size_t node_idx, float scaling_factor, int quant_bits,
-                                 const std::array<int, 3> &zero_point) {
+std::array<int, 6> get_quant_val(const bvh_t &bvh, size_t node_idx, size_t quant_idx, float scaling_factor,
+                                 int quant_bits) {
     bbox_t node_bbox = bvh.nodes[node_idx].bounding_box_proxy().to_bounding_box();
+    bbox_t quant_bbox = bvh.nodes[quant_idx].bounding_box_proxy().to_bounding_box();
 
     std::array<int, 6> ret{};
     for (int i = 0; i < 3; i++) {
-        ret[i * 2] = floor_to_int(node_bbox.min[i] / scaling_factor) - zero_point[i];
-        ret[i * 2 + 1] = ceil_to_int(node_bbox.max[i] / scaling_factor) - zero_point[i];
+        ret[i * 2] = floor_to_int((node_bbox.min[i] - quant_bbox.min[i]) / scaling_factor);
+        ret[i * 2 + 1] = ceil_to_int((node_bbox.max[i] - quant_bbox.min[i]) / scaling_factor);
         int max_q = (1 << quant_bits);
         assert(0 <= ret[i * 2] && ret[i * 2] <= max_q);
         assert(0 <= ret[i * 2 + 1] && ret[i * 2 + 1] <= max_q);
@@ -104,15 +95,16 @@ std::array<int, 6> get_quant_val(const bvh_t &bvh, size_t node_idx, float scalin
 }
 
 bbox_t get_quant_bbox(const bvh_t &bvh, size_t node_idx, size_t quant_idx, int quant_bits) {
+    bbox_t quant_bbox = bvh.nodes[quant_idx].bounding_box_proxy().to_bounding_box();
+
     int quant_num = get_quant_num(quant_bits);
     float scaling_factor = get_scaling_factor(bvh, quant_idx, quant_num);
-    std::array<int, 3> zero_point = get_zero_point(bvh, quant_idx, scaling_factor);
-    std::array<int, 6> quant_val = get_quant_val(bvh, node_idx, scaling_factor, quant_bits, zero_point);
+    std::array<int, 6> quant_val = get_quant_val(bvh, node_idx, quant_idx, scaling_factor, quant_bits);
 
     bbox_t ret;
     for (int i = 0; i < 3; i++) {
-        ret.min[i] = scaling_factor * (float)(quant_val[i * 2] + zero_point[i]);
-        ret.max[i] = scaling_factor * (float)(quant_val[i * 2 + 1] + zero_point[i]);
+        ret.min[i] = quant_bbox.min[i] + scaling_factor * (float)quant_val[i * 2];
+        ret.max[i] = quant_bbox.min[i] + scaling_factor * (float)quant_val[i * 2 + 1];
         assert(std::isfinite(ret.min[i]));
         assert(std::isfinite(ret.max[i]));
     }
@@ -629,6 +621,7 @@ int main(int argc, char *argv[]) {
     if (ray_file == nullptr)
         return 0;
 
+    /*
     int cluster_map[bvh.node_count];
     float scaling_factors[cluster_indices.size()];
     std::array<int, 3> zero_points[cluster_indices.size()];
@@ -651,6 +644,7 @@ int main(int argc, char *argv[]) {
             quant_nodes[i].cluster_idx = cluster_map[i];
         }
     }
+     */
 
     std::cout << "traversing..." << std::endl;
     traverser_t traverser(bvh);
@@ -679,6 +673,7 @@ int main(int argc, char *argv[]) {
         else
             assert(!quant_result.has_value());
 
+        /*
         ray_ = ray;
         auto int_result = int_traverse(ray_, sw, int_statistics, bvh, triangles, quant_nodes,
                                        scaling_factors, zero_points, quant_bvh);
@@ -692,6 +687,7 @@ int main(int argc, char *argv[]) {
         } else if (!int_result.has_value()) {
             correct_rays++;
         }
+         */
     }
     std::cout << "traversal_steps: " << statistics.traversal_steps << std::endl;
     std::cout << "traversal_steps (quantized): " << quant_statistics.traversal_steps << std::endl;
