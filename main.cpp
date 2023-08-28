@@ -282,9 +282,9 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, float sw,
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 8) {
+    if (argc < 7) {
         std::cerr << "usage: " << argv[0] <<
-            " MODEL_FILE QUANT_BITS T_TRV_FLOAT T_TRV_INT T_SWITCH T_IST SW [RAY_FILE]" << std::endl;
+            " MODEL_FILE QUANT_BITS T_TRV_FLOAT T_TRV_INT T_SWITCH T_IST [RAY_FILE] [SW]" << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -294,19 +294,20 @@ int main(int argc, char *argv[]) {
     float t_trv_int = std::stof(argv[4]);
     float t_switch = std::stof(argv[5]);
     float t_ist = std::stof(argv[6]);
-    float sw = std::stof(argv[7]);
     std::cout << "MODEL_FILE = " << model_file << std::endl;
     std::cout << "QUANT_BITS = " << quant_bits << std::endl;
     std::cout << "T_TRV_FLOAT = " << t_trv_float << std::endl;
     std::cout << "T_TRV_INT = " << t_trv_int << std::endl;
     std::cout << "T_SWITCH = " << t_switch << std::endl;
     std::cout << "T_IST = " << t_ist << std::endl;
-    std::cout << "SW = " << sw << std::endl;
 
     char *ray_file = nullptr;
+    float sw;
     if (argc >= 9) {
-        ray_file = argv[8];
+        ray_file = argv[7];
+        sw = std::stof(argv[8]);
         std::cout << "RAY_FILE = " << ray_file << std::endl;
+        std::cout << "SW = " << sw << std::endl;
     }
 
     happly::PLYData ply_data(model_file);
