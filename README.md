@@ -1,1 +1,1 @@
-![](algo.png)
+![](algo.jpg)
