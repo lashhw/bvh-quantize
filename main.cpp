@@ -171,11 +171,34 @@ std::pair<int, int> intersect_bbox(int qy_max,
 
     for (int i = 0; i < 3; i++) {
         if (sqw[i] < -128) {
-            entry[i] = std::numeric_limits<int>::min();
-            exit[i] = -128 * qx_b[i] + (qb[i] + 1);
+            [&] {
+                for (int j = 8; j <= 30; j++) {
+                    if (sqw[i] >= -(1 << j)) {
+                        entry[i] = -(1 << j) * qx_a[i] + qb[i];
+                        exit[i] = -(1 << (j - 1)) * qx_b[i] + (qb[i] + 1);
+                        return;
+                    }
+                }
+                entry[i] = std::numeric_limits<int>::min();
+                exit[i] = -(1 << 30) * qx_b[i] + (qb[i] + 1);
+            }();
         } else if (sqw[i] > 126) {
-            entry[i] = 127 * qx_a[i] + qb[i];
-            exit[i] = std::numeric_limits<int>::max();
+            [&] {
+                if (sqw[i] < 256) {
+                    entry[i] = 127 * qx_a[i] + qb[i];
+                    exit[i] = 256 * qx_b[i] + (qb[i] + 1);
+                    return;
+                }
+                for (int j = 9; j <= 29; j++) {
+                    if (sqw[i] < (1 << j)) {
+                        entry[i] = (1 << (j - 1)) * qx_a[i] + qb[i];
+                        exit[i] = (1 << j) * qx_b[i] + (qb[i] + 1);
+                        return;
+                    }
+                }
+                entry[i] = (1 << 30) * qx_a[i] + qb[i];
+                exit[i] = std::numeric_limits<int>::max();
+            }();
         }
     }
 
