@@ -18,7 +18,7 @@ grid = pv.StructuredGrid(x, y, z)
 
 def summary(a, b, c):
     def transform(x):
-        if x >= (1 << 29):
+        if x >= (1 << 30):
             return 0b100000000
         if x <= -(1 << 30):
             return 0b100000001
@@ -49,7 +49,7 @@ for i in range(grid.n_cells):
 ix = np.floor(1.0 / (cx * sw)).astype(np.int64)
 iy = np.floor(1.0 / (cy * sw)).astype(np.int64)
 iz = np.floor(1.0 / (cz * sw)).astype(np.int64)
-colors = np.zeros(grid.n_cells, dtype=int)
+colors = np.empty(grid.n_cells, dtype=int)
 for i in range(grid.n_cells):
     encoded, quant_type = summary(ix[i], iy[i], iz[i])
     colors[i] = hash_to_color(encoded, quant_type)
