@@ -4,7 +4,7 @@ import pyvista as pv
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 
-sw = 0.125
+sw = 0.03125
 num_samples = 2048
 num_colors = 20
 
@@ -18,37 +18,42 @@ grid = pv.StructuredGrid(x, y, z)
 
 def summary(a, b, c):
     def transform(x):
-        if x >= (1 << 30):
-            return 0b100000000
-        if x <= -(1 << 30):
-            return 0b100000001
-        if x < -128:
-            return 0b110000000 | int(x).bit_length()
-        if x > 127:
-            return 0b111000000 | int(x).bit_length()
-        return 0b11111111 & x
-    encoded = transform(a) | (transform(b) << 9) | (transform(c) << 18)
-    in_range = lambda x: -128 <= x and x <= 127
-    quant_type = 1 if in_range(a) and in_range(b) and in_range(c) else 0
-    return encoded, quant_type
+        sign = 1 if x & (1 << 31) else 0
+        exponent = (x >> 23) & 0b011111111
+        mantissa = x & ((1 << 23) - 1)
+
+        if exponent <= 127 + 7:
+            new_exponent = 0
+            new_mantissa = int(abs(x.view(np.float32)))
+        else:
+            new_exponent = (exponent - (127 + 7)) & 0b11111
+            new_mantissa = 0b10000000 | (mantissa >> 16)
+
+        return ((sign << 13) | (new_exponent << 8) | new_mantissa), (new_exponent & 1)
+
+    ta, ea = transform(a)
+    tb, eb = transform(b)
+    tc, ec = transform(c)
+    encoded = (ta << 28) | (tb << 14) | tc
+    return encoded, (ea ^ eb ^ ec)
 
 def hash_to_color(encoded, quant_type):
-    x_bytes = int(encoded).to_bytes(32, 'big')
+    x_bytes = int(encoded).to_bytes(42, 'big')
     h = hashlib.sha256(x_bytes).digest()
     c = int.from_bytes(h, 'big') % num_colors
-    if quant_type == 0:
+    if quant_type:
         c += num_colors
     return c
 
 print('computing color...')
-cx = np.empty(grid.n_cells, dtype=float)
-cy = np.empty(grid.n_cells, dtype=float)
-cz = np.empty(grid.n_cells, dtype=float)
+cx = np.empty(grid.n_cells, dtype=np.float32)
+cy = np.empty(grid.n_cells, dtype=np.float32)
+cz = np.empty(grid.n_cells, dtype=np.float32)
 for i in range(grid.n_cells):
     cx[i], cy[i], cz[i] = grid.get_cell(i).center
-ix = np.floor(1.0 / (cx * sw)).astype(np.int64)
-iy = np.floor(1.0 / (cy * sw)).astype(np.int64)
-iz = np.floor(1.0 / (cz * sw)).astype(np.int64)
+ix = np.floor(1.0 / (cx * sw)).view(np.uint32)
+iy = np.floor(1.0 / (cy * sw)).view(np.uint32)
+iz = np.floor(1.0 / (cz * sw)).view(np.uint32)
 colors = np.empty(grid.n_cells, dtype=int)
 for i in range(grid.n_cells):
     encoded, quant_type = summary(ix[i], iy[i], iz[i])
@@ -57,8 +62,8 @@ grid.cell_data['color'] = colors
 
 print('plotting...')
 p = pv.Plotter()
-cmap1 = plt.get_cmap('tab20')
-cmap2 = plt.get_cmap('tab20b')
+cmap1 = plt.get_cmap('tab20b')
+cmap2 = plt.get_cmap('tab20c')
 combined_cmap = ListedColormap(cmap1.colors + cmap2.colors)
 p.add_mesh(grid, cmap=combined_cmap)
 p.show_grid()
