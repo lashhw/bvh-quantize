@@ -4,7 +4,7 @@ import pyvista as pv
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 
-sw = 0.03125
+sw = 0.0078125  # 2^(-7)
 num_samples = 2048
 num_colors = 20
 
@@ -22,12 +22,8 @@ def summary(a, b, c):
         exponent = (x >> 23) & 0b011111111
         mantissa = x & ((1 << 23) - 1)
 
-        if exponent <= 127 + 7:
-            new_exponent = 0
-            new_mantissa = int(abs(x.view(np.float32)))
-        else:
-            new_exponent = (exponent - (127 + 7)) & 0b11111
-            new_mantissa = 0b10000000 | (mantissa >> 16)
+        new_exponent = (exponent - (127 + 7)) & 0b11111
+        new_mantissa = 0b10000000 | (mantissa >> 16)
 
         return ((sign << 13) | (new_exponent << 8) | new_mantissa), (new_exponent & 1)
 
