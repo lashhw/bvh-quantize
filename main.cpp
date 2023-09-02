@@ -133,74 +133,31 @@ std::optional<intersection_result_t> intersect_leaf(ray_t& ray, size_t node_idx,
 }
 
 std::pair<int, int> intersect_bbox(int qy_max,
-                                   int inv_sw,
+                                   const std::array<bool, 3>& iw,
+                                   const std::array<int, 3>& rw,
                                    const std::array<int, 3>& qw,
                                    const std::array<int, 6>& qx,
                                    const std::array<int, 3>& qb) {
     const int qx_a[3] = {
-        qw[0] < 0 ? qx[1] : qx[0],
-        qw[1] < 0 ? qx[3] : qx[2],
-        qw[2] < 0 ? qx[5] : qx[4]
+        iw[0] ? qx[1] : qx[0],
+        iw[1] ? qx[3] : qx[2],
+        iw[2] ? qx[5] : qx[4]
     };
 
     const int qx_b[3] = {
-        qw[0] < 0 ? qx[0] : qx[1],
-        qw[1] < 0 ? qx[2] : qx[3],
-        qw[2] < 0 ? qx[4] : qx[5]
-    };
-
-    const int sqw[3] = {
-        (qw[0] >= 0 ? inv_sw : -inv_sw) + qw[0],
-        (qw[1] >= 0 ? inv_sw : -inv_sw) + qw[1],
-        (qw[2] >= 0 ? inv_sw : -inv_sw) + qw[2]
+        iw[0] ? qx[0] : qx[1],
+        iw[1] ? qx[2] : qx[3],
+        iw[2] ? qx[4] : qx[5]
     };
 
     int entry[3];
     int exit[3];
-    entry[0] = std::min(sqw[0] * qx_a[0], (sqw[0] + 1) * qx_a[0]) + qb[0];
-    entry[1] = std::min(sqw[1] * qx_a[1], (sqw[1] + 1) * qx_a[1]) + qb[1];
-    entry[2] = std::min(sqw[2] * qx_a[2], (sqw[2] + 1) * qx_a[2]) + qb[2];
-    exit[0] = std::max(sqw[0] * qx_b[0], (sqw[0] + 1) * qx_b[0]) + (qb[0] + 1);
-    exit[1] = std::max(sqw[1] * qx_b[1], (sqw[1] + 1) * qx_b[1]) + (qb[1] + 1);
-    exit[2] = std::max(sqw[2] * qx_b[2], (sqw[2] + 1) * qx_b[2]) + (qb[2] + 1);
-
-    for (int i = 0; i < 3; i++) {
-        assert(qx_a[i] >= 0);
-        assert(qx_b[i] >= 0);
-    }
-
-    for (int i = 0; i < 3; i++) {
-        if (sqw[i] < -128) {
-            [&] {
-                for (int j = 8; j <= 30; j++) {
-                    if (sqw[i] >= -(1 << j)) {
-                        entry[i] = -(1 << j) * qx_a[i] + qb[i];
-                        exit[i] = -(1 << (j - 1)) * qx_b[i] + (qb[i] + 1);
-                        return;
-                    }
-                }
-                entry[i] = std::numeric_limits<int>::min();
-                exit[i] = -(1 << 30) * qx_b[i] + (qb[i] + 1);
-            }();
-        } else if (sqw[i] > 126) {
-            [&] {
-                if (sqw[i] < 256) {
-                    entry[i] = 127 * qx_a[i] + qb[i];
-                    exit[i] = 256 * qx_b[i] + (qb[i] + 1);
-                    return;
-                }
-                for (int j = 9; j <= 29; j++) {
-                    if (sqw[i] < (1 << j)) {
-                        entry[i] = (1 << (j - 1)) * qx_a[i] + qb[i];
-                        exit[i] = (1 << j) * qx_b[i] + (qb[i] + 1);
-                        return;
-                    }
-                }
-                entry[i] = (1 << 30) * qx_a[i] + qb[i];
-                exit[i] = std::numeric_limits<int>::max();
-            }();
-        }
-    }
+    entry[0] = (iw[0] ? -1 : 1) * ((qw[0] * qx_a[0]) << rw[0]) + qb[0];
+    entry[1] = (iw[1] ? -1 : 1) * ((qw[1] * qx_a[1]) << rw[1]) + qb[1];
+    entry[2] = (iw[2] ? -1 : 1) * ((qw[2] * qx_a[2]) << rw[2]) + qb[2];
+    exit[0] = (iw[0] ? -1 : 1) * ((qw[0] * qx_b[0]) << rw[0]) + qb[0];
+    exit[1] = (iw[1] ? -1 : 1) * ((qw[1] * qx_b[1]) << rw[1]) + qb[1];
+    exit[2] = (iw[2] ? -1 : 1) * ((qw[2] * qx_b[2]) << rw[2]) + qb[2];
 
     std::pair<int, int> ret;
     ret.first = std::max(entry[0], std::max(entry[1], std::max(entry[2], 0)));
@@ -208,7 +165,20 @@ std::pair<int, int> intersect_bbox(int qy_max,
     return ret;
 }
 
-std::optional<intersection_result_t> int_traverse(ray_t& ray, int log_sw,
+// return: (sign, exponent, mantissa)
+std::tuple<bool, int, int> transform_w(float w) {
+    int wi = *reinterpret_cast<int*>(&w);
+    bool sign = wi & (1 << 31);
+    int exponent = (wi >> 23) & 0b011111111;
+    int mantissa = wi & ((1 << 23) - 1);
+
+    int new_exponent = (exponent - (127 + 7)) & 0b11111;
+    int new_mantissa = 0b10000000 | (mantissa >> 16);
+
+    return {sign, new_exponent, new_mantissa};
+}
+
+std::optional<intersection_result_t> int_traverse(ray_t& ray,
                                                   int_statistics_t& statistics,
                                                   const bvh_t& bvh,
                                                   const std::vector<triangle_t>& triangles,
@@ -219,13 +189,16 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, int log_sw,
 
     bvh::FastNodeIntersector<bvh_t> node_intersector(ray);
 
-    int inv_sw = 1 << log_sw;
+    int inv_sw = 1 << 7;
+    auto inv_sw_f = static_cast<float>(inv_sw);
+    std::array<bool, 3> iw{};
+    std::array<int, 3> rw{};
     std::array<int, 3> qw{};
     for (int i = 0; i < 3; i++) {
-        if (ray.direction[i] > 0)
-            qw[i] = floor_to_int((1.0f / ray.direction[i] - 1.0f) * (float)inv_sw);
-        else
-            qw[i] = floor_to_int((1.0f / ray.direction[i] + 1.0f) * (float)inv_sw);
+        auto result = transform_w(inv_sw_f / ray.direction[i]);
+        iw[i] = std::get<0>(result);
+        rw[i] = std::get<1>(result);
+        qw[i] = std::get<2>(result);
     }
 
     std::optional<intersection_result_t> best_hit;
@@ -258,11 +231,11 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, int log_sw,
         };
         std::array<int, 3> qb{};
         for (int i = 0; i < 3; i++)
-            qb[i] = floor_to_int(-o_local[i] / (ray.direction[i] * sx) * (float)inv_sw);
-        int qy_max = ceil_to_int((ray.tmax - y_quant) / sx * (float)inv_sw);
+            qb[i] = floor_to_int(-o_local[i] / (ray.direction[i] * sx) * inv_sw_f);
+        int qy_max = ceil_to_int((ray.tmax - y_quant) / sx * inv_sw_f);
 
-        std::pair<int, int> distance_left = intersect_bbox(qy_max, inv_sw, qw, quant_nodes[left_idx].bounds, qb);
-        std::pair<int, int> distance_right = intersect_bbox(qy_max, inv_sw, qw, quant_nodes[right_idx].bounds, qb);
+        std::pair<int, int> distance_left = intersect_bbox(qy_max, iw, rw, qw, quant_nodes[left_idx].bounds, qb);
+        std::pair<int, int> distance_right = intersect_bbox(qy_max, iw, rw, qw, quant_nodes[right_idx].bounds, qb);
 
         bool left_hit = false;
         bool right_hit = false;
@@ -303,7 +276,7 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray, int log_sw,
 int main(int argc, char *argv[]) {
     if (argc < 7) {
         std::cerr << "usage: " << argv[0] <<
-            " MODEL_FILE QUANT_BITS T_TRV_FLOAT T_TRV_INT T_SWITCH T_IST [RAY_FILE] [LOG_SW]" << std::endl;
+            " MODEL_FILE QUANT_BITS T_TRV_FLOAT T_TRV_INT T_SWITCH T_IST [RAY_FILE]" << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -321,12 +294,9 @@ int main(int argc, char *argv[]) {
     std::cout << "T_IST = " << t_ist << std::endl;
 
     char *ray_file = nullptr;
-    int log_sw;
-    if (argc >= 9) {
+    if (argc >= 8) {
         ray_file = argv[7];
-        log_sw = std::stoi(argv[8]);
         std::cout << "RAY_FILE = " << ray_file << std::endl;
-        std::cout << "LOG_SW = " << log_sw << std::endl;
     }
 
     happly::PLYData ply_data(model_file);
@@ -697,7 +667,7 @@ int main(int argc, char *argv[]) {
             assert(!quant_result.has_value());
 
         ray_ = ray;
-        auto int_result = int_traverse(ray_, log_sw, int_statistics, bvh, triangles, quant_nodes,
+        auto int_result = int_traverse(ray_, int_statistics, bvh, triangles, quant_nodes,
                                        scaling_factors, quant_indices);
         if (result.has_value()) {
             if (int_result.has_value() &&
