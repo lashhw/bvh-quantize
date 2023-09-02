@@ -2,4 +2,4 @@
 	gcc -Wall -O3 -lxxhash -shared -o /tmp/encode_and_hash.so -fPIC encode_and_hash.c
 
 clean:
-	rm /tmp/encode_and_hash.so
+	rm -rf /tmp/encode_and_hash.so

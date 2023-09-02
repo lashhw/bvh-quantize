@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include "xxhash.h"
 
-unsigned int encode(unsigned int x) {
+static unsigned int encode(unsigned int x) {
     unsigned int sign = (x & (1 << 31)) ? 1 : 0;
     unsigned int exponent = (x >> 23) & 0b11111111;
     unsigned int mantissa = x & ((1 << 23) - 1);
