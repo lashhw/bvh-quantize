@@ -18,12 +18,12 @@ z = np.outer(np.ones(np.size(u)), np.cos(v))
 grid = pv.StructuredGrid(x, y, z)
 del u, v, x, y, z
 
-print('extracting center...')
-cx = np.empty(grid.n_cells, dtype=np.single)
-cy = np.empty(grid.n_cells, dtype=np.single)
-cz = np.empty(grid.n_cells, dtype=np.single)
-for i in tqdm(range(grid.n_cells)):
-    cx[i], cy[i], cz[i] = grid.get_cell(i).center
+print('extracting centers...')
+centers = grid.cell_centers().points
+assert(centers.shape[0] == grid.n_cells)
+cx = np.array(centers[:, 0], dtype=np.single)
+cy = np.array(centers[:, 1], dtype=np.single)
+cz = np.array(centers[:, 2], dtype=np.single)
 
 print('calculating inverse...')
 sw = 0.0078125  # 2^(-7)
