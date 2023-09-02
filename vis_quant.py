@@ -4,7 +4,6 @@ import pyvista as pv
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 
-sw = 0.0078125  # 2^(-7)
 num_samples = 2048
 num_colors = 20
 
@@ -47,6 +46,7 @@ cy = np.empty(grid.n_cells, dtype=np.float32)
 cz = np.empty(grid.n_cells, dtype=np.float32)
 for i in range(grid.n_cells):
     cx[i], cy[i], cz[i] = grid.get_cell(i).center
+sw = 0.0078125  # 2^(-7)
 ix = np.floor(1.0 / (cx * sw)).view(np.uint32)
 iy = np.floor(1.0 / (cy * sw)).view(np.uint32)
 iz = np.floor(1.0 / (cz * sw)).view(np.uint32)
