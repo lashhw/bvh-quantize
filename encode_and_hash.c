@@ -10,7 +10,7 @@ unsigned int encode(unsigned int x) {
     unsigned int new_exponent = (exponent - (127 + 7)) & 0b11111;
     unsigned int new_mantissa = 0b10000000 | (mantissa >> 16);
 
-    return (sign << 13) | new_exponent << 8 | new_mantissa;
+    return (sign << 13) | (new_exponent << 8) | new_mantissa;
 }
 
 void encode_and_hash(int size,
