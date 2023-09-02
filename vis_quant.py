@@ -35,7 +35,7 @@ def summary(a, b, c):
     return encoded, (ea ^ eb ^ ec)
 
 def hash_to_color(encoded, quant_type):
-    x_bytes = int(encoded).to_bytes(42, 'big')
+    x_bytes = int(encoded).to_bytes(6, 'big')
     h = hashlib.sha256(x_bytes).digest()
     c = int.from_bytes(h, 'big') % num_colors
     if quant_type:
