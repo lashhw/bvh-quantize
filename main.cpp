@@ -134,10 +134,13 @@ std::optional<intersection_result_t> intersect_leaf(ray_t& ray, size_t node_idx,
 
 std::pair<int, int> intersect_bbox(int qy_max,
                                    const std::array<bool, 3>& iw,
-                                   const std::array<int, 3>& rw,
-                                   const std::array<int, 3>& qw,
+                                   const std::array<int, 3>& rw_l,
+                                   const std::array<int, 3>& qw_l,
+                                   const std::array<int, 3>& rw_h,
+                                   const std::array<int, 3>& qw_h,
                                    const std::array<int, 6>& qx,
-                                   const std::array<int, 3>& qb) {
+                                   const std::array<int, 3>& qb_l,
+                                   const std::array<int, 3>& qb_h) {
     const int qx_a[3] = {
         iw[0] ? qx[1] : qx[0],
         iw[1] ? qx[3] : qx[2],
@@ -152,12 +155,12 @@ std::pair<int, int> intersect_bbox(int qy_max,
 
     int entry[3];
     int exit[3];
-    entry[0] = (iw[0] ? -1 : 1) * ((qw[0] * qx_a[0]) << rw[0]) + qb[0];
-    entry[1] = (iw[1] ? -1 : 1) * ((qw[1] * qx_a[1]) << rw[1]) + qb[1];
-    entry[2] = (iw[2] ? -1 : 1) * ((qw[2] * qx_a[2]) << rw[2]) + qb[2];
-    exit[0] = (iw[0] ? -1 : 1) * ((qw[0] * qx_b[0]) << rw[0]) + qb[0];
-    exit[1] = (iw[1] ? -1 : 1) * ((qw[1] * qx_b[1]) << rw[1]) + qb[1];
-    exit[2] = (iw[2] ? -1 : 1) * ((qw[2] * qx_b[2]) << rw[2]) + qb[2];
+    entry[0] = (iw[0] ? -1 : 1) * ((qw_l[0] * qx_a[0]) << rw_l[0]) + qb_l[0];
+    entry[1] = (iw[1] ? -1 : 1) * ((qw_l[1] * qx_a[1]) << rw_l[1]) + qb_l[1];
+    entry[2] = (iw[2] ? -1 : 1) * ((qw_l[2] * qx_a[2]) << rw_l[2]) + qb_l[2];
+    exit[0] = (iw[0] ? -1 : 1) * ((qw_h[0] * qx_b[0]) << rw_h[0]) + qb_h[0];
+    exit[1] = (iw[1] ? -1 : 1) * ((qw_h[1] * qx_b[1]) << rw_h[1]) + qb_h[1];
+    exit[2] = (iw[2] ? -1 : 1) * ((qw_h[2] * qx_b[2]) << rw_h[2]) + qb_h[2];
 
     std::pair<int, int> ret;
     ret.first = std::max(entry[0], std::max(entry[1], std::max(entry[2], 0)));
@@ -165,17 +168,27 @@ std::pair<int, int> intersect_bbox(int qy_max,
     return ret;
 }
 
-// return: (sign, exponent, mantissa)
-std::tuple<bool, int, int> transform_w(float w) {
+// return: (sign, low_exponent, low_mantissa, high_exponent, high_mantissa)
+std::tuple<bool, int, int, int, int> transform_w(float w) {
+    w = floorf(w);
     int wi = *reinterpret_cast<int*>(&w);
+
     bool sign = wi & (1 << 31);
     int exponent = (wi >> 23) & 0b011111111;
     int mantissa = wi & ((1 << 23) - 1);
 
-    int new_exponent = (exponent - (127 + 7)) & 0b11111;
-    int new_mantissa = 0b10000000 | (mantissa >> 16);
+    int low_exponent = (exponent - (127 + 7)) & 0b11111;
+    int low_mantissa = mantissa >> 16;
+    int low = (low_exponent << 7) | low_mantissa;
 
-    return {sign, new_exponent, new_mantissa};
+    int high = sign ? (low - 1) : (low + 1);
+    int high_exponent = high >> 7;
+    int high_mantissa = high & 0b1111111;
+
+    low_mantissa |= 0b10000000;
+    high_mantissa |= 0b10000000;
+
+    return {sign, low_exponent, low_mantissa, high_exponent, high_mantissa};
 }
 
 std::optional<intersection_result_t> int_traverse(ray_t& ray,
@@ -192,13 +205,17 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray,
     int inv_sw = 1 << 7;
     auto inv_sw_f = static_cast<float>(inv_sw);
     std::array<bool, 3> iw{};
-    std::array<int, 3> rw{};
-    std::array<int, 3> qw{};
+    std::array<int, 3> rw_l{};
+    std::array<int, 3> qw_l{};
+    std::array<int, 3> rw_h{};
+    std::array<int, 3> qw_h{};
     for (int i = 0; i < 3; i++) {
         auto result = transform_w(inv_sw_f / ray.direction[i]);
         iw[i] = std::get<0>(result);
-        rw[i] = std::get<1>(result);
-        qw[i] = std::get<2>(result);
+        rw_l[i] = std::get<1>(result);
+        qw_l[i] = std::get<2>(result);
+        rw_h[i] = std::get<3>(result);
+        qw_h[i] = std::get<4>(result);
     }
 
     std::optional<intersection_result_t> best_hit;
@@ -229,13 +246,18 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray,
             ray.origin[1] + y_quant * ray.direction[1] - quant_bbox.min[1],
             ray.origin[2] + y_quant * ray.direction[2] - quant_bbox.min[2]
         };
-        std::array<int, 3> qb{};
-        for (int i = 0; i < 3; i++)
-            qb[i] = floor_to_int(-o_local[i] / (ray.direction[i] * sx) * inv_sw_f);
+        std::array<int, 3> qb_l{};
+        std::array<int, 3> qb_h{};
+        for (int i = 0; i < 3; i++) {
+            qb_l[i] = floor_to_int(-o_local[i] / (ray.direction[i] * sx) * inv_sw_f);
+            qb_h[i] = qb_l[i] + 1;
+        }
         int qy_max = ceil_to_int((ray.tmax - y_quant) / sx * inv_sw_f);
 
-        std::pair<int, int> distance_left = intersect_bbox(qy_max, iw, rw, qw, quant_nodes[left_idx].bounds, qb);
-        std::pair<int, int> distance_right = intersect_bbox(qy_max, iw, rw, qw, quant_nodes[right_idx].bounds, qb);
+        std::pair<int, int> distance_left = intersect_bbox(qy_max, iw, rw_l, qw_l, rw_h, qw_h,
+                                                           quant_nodes[left_idx].bounds, qb_l, qb_h);
+        std::pair<int, int> distance_right = intersect_bbox(qy_max, iw, rw_l, qw_l, rw_h, qw_h,
+                                                            quant_nodes[right_idx].bounds, qb_l, qb_h);
 
         bool left_hit = false;
         bool right_hit = false;
