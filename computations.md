@@ -1,10 +1,8 @@
 ## Vanilla
 ### per traversal_steps
-* 2 node_intersector
-    * 6 FP32_MUL
-    * 6 FP32_ADDSUB
-    * 6 FP32_CMP
-* 2 FP32_CMP
+* 12 FP32_MUL
+* 12 FP32_ADDSUB
+* 14 FP32_CMP
 
 ### per both_intersected
 * 3 FP32_CMP
@@ -20,11 +18,9 @@
 * 1 FP32_ADDSUB
 
 ### per traversal_steps
-* 2 
-    * 6 INT8_MUL
-    * 6 INT32_ADDSUB
-    * 8 INT32_CMP
-* 2 INT32_CMP
+* 12 INT8_MUL
+* 12 INT32_ADDSUB
+* 14 INT32_CMP
 
 ### per both_intersected
 * 1 INT32_CMP
