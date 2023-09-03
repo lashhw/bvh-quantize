@@ -1,6 +1,7 @@
 #include <iostream>
 #include <numeric>
 #include <vector>
+#include <unordered_set>
 #include <bvh/triangle.hpp>
 #include <bvh/bvh.hpp>
 #include <bvh/sweep_sah_builder.hpp>
@@ -30,6 +31,8 @@ struct intersection_result_t {
 
 struct statistics_t {
     traverser_t::Statistics s;
+    size_t clusters = 0;
+    size_t recompute_qymax = 0;
     size_t intersections_b = 0;
 };
 
@@ -198,6 +201,8 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray,
                                                   const quant_node_t* quant_nodes,
                                                   const float* scaling_factors,
                                                   const std::vector<size_t>& quant_indices) {
+    static std::unordered_set<int> cluster_set;
+    cluster_set.clear();
     assert(ray.tmin == 0.0f);
 
     bvh::FastNodeIntersector<bvh_t> node_intersector(ray);
@@ -218,6 +223,7 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray,
         qw_h[i] = std::get<4>(result);
     }
 
+    float prev_tmax = ray.tmax;
     std::optional<intersection_result_t> best_hit;
     std::stack<size_t> stk;
     stk.push(bvh.nodes[0].first_child_or_primitive);
@@ -229,6 +235,7 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray,
 
         size_t right_idx = left_idx + 1;
         int cluster_idx = quant_nodes[left_idx].cluster_idx;
+        cluster_set.insert(cluster_idx);
         assert(cluster_idx != -1);
         assert(cluster_idx == quant_nodes[right_idx].cluster_idx);
 
@@ -252,6 +259,9 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray,
             qb_l[i] = floor_to_int(-o_local[i] / (ray.direction[i] * sx) * inv_sw_f);
             qb_h[i] = qb_l[i] + 1;
         }
+        if (ray.tmax != prev_tmax)
+            statistics.recompute_qymax++;
+        prev_tmax = ray.tmax;
         int qy_max = ceil_to_int((ray.tmax - y_quant) / sx * inv_sw_f);
 
         std::pair<int, int> distance_left = intersect_bbox(qy_max, iw, rw_l, qw_l, rw_h, qw_h,
@@ -282,6 +292,7 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray,
 
         if (left_hit) {
             if (right_hit) {
+                statistics.s.both_intersected++;
                 if (distance_left.first > distance_right.first)
                     std::swap(left_idx, right_idx);
                 stk.emplace(bvh.nodes[right_idx].first_child_or_primitive);
@@ -291,6 +302,11 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray,
             stk.emplace(bvh.nodes[right_idx].first_child_or_primitive);
         }
     }
+
+    statistics.clusters += cluster_set.size();
+
+    if (best_hit.has_value())
+        statistics.s.finalize++;
 
     return best_hit;
 }
