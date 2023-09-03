@@ -235,6 +235,7 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray,
 
         size_t right_idx = left_idx + 1;
         int cluster_idx = quant_nodes[left_idx].cluster_idx;
+        bool new_cluster = cluster_set.count(cluster_idx) == 0;
         cluster_set.insert(cluster_idx);
         assert(cluster_idx != -1);
         assert(cluster_idx == quant_nodes[right_idx].cluster_idx);
@@ -259,7 +260,7 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray,
             qb_l[i] = floor_to_int(-o_local[i] / (ray.direction[i] * sx) * inv_sw_f);
             qb_h[i] = qb_l[i] + 1;
         }
-        if (ray.tmax != prev_tmax)
+        if (!new_cluster && ray.tmax != prev_tmax)
             statistics.recompute_qymax++;
         prev_tmax = ray.tmax;
         int qy_max = ceil_to_int((ray.tmax - y_quant) / sx * inv_sw_f);

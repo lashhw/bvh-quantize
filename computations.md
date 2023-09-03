@@ -9,8 +9,8 @@
 
 ## Quantized
 ### per clusters
-* 11 FP32_MUL
-* 12 FP32_ADDSUB
+* 12 FP32_MUL
+* 13 FP32_ADDSUB
 * 7 FP32_CMP
 
 ### per recompute_ymax
