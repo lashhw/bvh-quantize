@@ -5,7 +5,7 @@
 * 14 FP32_CMP
 
 ### per both_intersected
-* 3 FP32_CMP
+* 1 FP32_CMP
 
 ## Quantized
 ### per clusters
