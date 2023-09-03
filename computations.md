@@ -28,7 +28,7 @@
 ## Common
 ### per ray
 * 3 FP32_RCP
-* 3 FP32_RCP
+* 3 FP32_MUL
 
 ### per intersections_a
 * 15 FP32_MUL
