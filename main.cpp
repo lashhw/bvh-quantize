@@ -28,9 +28,9 @@ struct intersection_result_t {
     triangle_t::Intersection intersection;
 };
 
-struct int_statistics_t {
-    intmax_t traversal_steps = 0;
-    intmax_t intersections = 0;
+struct statistics_t {
+    traverser_t::Statistics s;
+    size_t intersections_b = 0;
 };
 
 int get_quant_num(int quant_bits) {
@@ -112,7 +112,7 @@ bbox_t get_quant_bbox(const bvh_t &bvh, size_t node_idx, size_t quant_idx, int q
     return ret;
 }
 
-std::optional<intersection_result_t> intersect_leaf(ray_t& ray, size_t node_idx, int_statistics_t& statistics,
+std::optional<intersection_result_t> intersect_leaf(ray_t& ray, size_t node_idx, statistics_t& statistics,
                                                     const bvh_t& bvh,
                                                     const std::vector<triangle_t>& triangles) {
     node_t& node = bvh.nodes[node_idx];
@@ -122,7 +122,7 @@ std::optional<intersection_result_t> intersect_leaf(ray_t& ray, size_t node_idx,
 
     std::optional<intersection_result_t> best_hit;
     for (size_t i = begin; i < end; i++) {
-        statistics.intersections++;
+        statistics.s.intersections_a++;
         size_t triangle_idx = bvh.primitive_indices[i];
         if (auto hit = triangles[triangle_idx].intersect(ray)) {
             best_hit = {triangle_idx, hit.value()};
@@ -192,7 +192,7 @@ std::tuple<bool, int, int, int, int> transform_w(float w) {
 }
 
 std::optional<intersection_result_t> int_traverse(ray_t& ray,
-                                                  int_statistics_t& statistics,
+                                                  statistics_t& statistics,
                                                   const bvh_t& bvh,
                                                   const std::vector<triangle_t>& triangles,
                                                   const quant_node_t* quant_nodes,
@@ -222,7 +222,7 @@ std::optional<intersection_result_t> int_traverse(ray_t& ray,
     std::stack<size_t> stk;
     stk.push(bvh.nodes[0].first_child_or_primitive);
     while (!stk.empty()) {
-        statistics.traversal_steps++;
+        statistics.s.traversal_steps++;
 
         size_t left_idx = stk.top();
         stk.pop();
@@ -666,9 +666,9 @@ int main(int argc, char *argv[]) {
     traverser_t quant_traverser(quant_bvh);
     primitive_intersector_t primitive_intersector(bvh, triangles.data());
     primitive_intersector_t quant_primitive_intersector(quant_bvh, triangles.data());
-    traverser_t::Statistics statistics;
-    traverser_t::Statistics quant_statistics;
-    int_statistics_t int_statistics;
+    statistics_t statistics;
+    statistics_t quant_statistics;
+    statistics_t int_statistics;
     intmax_t total_rays = 0;
     intmax_t correct_rays = 0;
     std::ifstream ray_fs(ray_file);
@@ -680,15 +680,18 @@ int main(int argc, char *argv[]) {
             r[6]
         );
         ray_t ray_ = ray;
-        auto result = traverser.traverse(ray_, primitive_intersector, statistics);
+        bvh::intersections_b = &statistics.intersections_b;
+        auto result = traverser.traverse(ray_, primitive_intersector, statistics.s);
         ray_ = ray;
-        auto quant_result = quant_traverser.traverse(ray_, quant_primitive_intersector, quant_statistics);
+        bvh::intersections_b = &quant_statistics.intersections_b;
+        auto quant_result = quant_traverser.traverse(ray_, quant_primitive_intersector, quant_statistics.s);
         if (result.has_value())
             assert(quant_result.has_value() && quant_result->intersection.t <= result->intersection.t);
         else
             assert(!quant_result.has_value());
 
         ray_ = ray;
+        bvh::intersections_b = &int_statistics.intersections_b;
         auto int_result = int_traverse(ray_, int_statistics, bvh, triangles, quant_nodes,
                                        scaling_factors, quant_indices);
         if (result.has_value()) {
@@ -702,12 +705,12 @@ int main(int argc, char *argv[]) {
             correct_rays++;
         }
     }
-    std::cout << "traversal_steps: " << statistics.traversal_steps << std::endl;
-    std::cout << "traversal_steps (quantized): " << quant_statistics.traversal_steps << std::endl;
-    std::cout << "traversal_steps (int): " << int_statistics.traversal_steps << std::endl;
-    std::cout << "intersections: " << statistics.intersections << std::endl;
-    std::cout << "intersections (quantized): " << quant_statistics.intersections << std::endl;
-    std::cout << "intersections (int): " << int_statistics.intersections << std::endl;
+    std::cout << "traversal_steps: " << statistics.s.traversal_steps << std::endl;
+    std::cout << "traversal_steps (quantized): " << quant_statistics.s.traversal_steps << std::endl;
+    std::cout << "traversal_steps (int): " << int_statistics.s.traversal_steps << std::endl;
+    std::cout << "intersections_a: " << statistics.s.intersections_a << std::endl;
+    std::cout << "intersections_a (quantized): " << quant_statistics.s.intersections_a << std::endl;
+    std::cout << "intersections_a (int): " << int_statistics.s.intersections_a << std::endl;
     std::cout << "total_rays: " << total_rays << std::endl;
     std::cout << "correct_rays: " << correct_rays << std::endl;
 }
