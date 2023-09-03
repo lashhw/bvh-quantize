@@ -721,12 +721,38 @@ int main(int argc, char *argv[]) {
             correct_rays++;
         }
     }
-    std::cout << "traversal_steps: " << statistics.s.traversal_steps << std::endl;
-    std::cout << "traversal_steps (quantized): " << quant_statistics.s.traversal_steps << std::endl;
-    std::cout << "traversal_steps (int): " << int_statistics.s.traversal_steps << std::endl;
-    std::cout << "intersections_a: " << statistics.s.intersections_a << std::endl;
-    std::cout << "intersections_a (quantized): " << quant_statistics.s.intersections_a << std::endl;
-    std::cout << "intersections_a (int): " << int_statistics.s.intersections_a << std::endl;
+
+    std::cout << "traversal_steps:" << std::endl;
+    std::cout << "  (vanilla) " << statistics.s.traversal_steps << std::endl;
+    std::cout << "  (quant) " << quant_statistics.s.traversal_steps << std::endl;
+    std::cout << "  (int) " << int_statistics.s.traversal_steps << std::endl;
+
+    std::cout << "intersections_a:" << std::endl;
+    std::cout << "  (vanilla) " << statistics.s.intersections_a << std::endl;
+    std::cout << "  (quant) " << quant_statistics.s.intersections_a << std::endl;
+    std::cout << "  (int) " << int_statistics.s.intersections_a << std::endl;
+
+    std::cout << "intersections_b:" << std::endl;
+    std::cout << "  (vanilla) " << statistics.intersections_b << std::endl;
+    std::cout << "  (quant) " << quant_statistics.intersections_b << std::endl;
+    std::cout << "  (int) " << int_statistics.intersections_b << std::endl;
+
+    std::cout << "both_intersected:" << std::endl;
+    std::cout << "  (vanilla) " << statistics.s.both_intersected << std::endl;
+    std::cout << "  (quant) " << quant_statistics.s.both_intersected << std::endl;
+    std::cout << "  (int) " << int_statistics.s.both_intersected << std::endl;
+
+    std::cout << "finalize:" << std::endl;
+    std::cout << "  (vanilla) " << statistics.s.finalize << std::endl;
+    std::cout << "  (quant) " << quant_statistics.s.finalize << std::endl;
+    std::cout << "  (int) " << int_statistics.s.finalize << std::endl;
+
+    std::cout << "clusters:" << std::endl;
+    std::cout << "  (int) " << int_statistics.clusters << std::endl;
+
+    std::cout << "recompute_qymax:" << std::endl;
+    std::cout << "  (int) " << int_statistics.recompute_qymax << std::endl;
+
     std::cout << "total_rays: " << total_rays << std::endl;
     std::cout << "correct_rays: " << correct_rays << std::endl;
 }
