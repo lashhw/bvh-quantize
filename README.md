@@ -4,19 +4,20 @@
 ## INT8 Traversal
 ### 和 2D bbox 相交最簡單的形式
 $$t_{entry_x}=
-\frac{x_{min}-x_o}{d_x}\\
-t_{exit_x}=
-\frac{x_{max}-x_o}{d_x}\\
-t_{entry_y}=
-\frac{y_{min}-y_o}{d_y}\\
-t_{exit_y}=
-\frac{y_{max}-y_o}{d_y}\\
-t_{entry}=\max\left(
+\frac{x_{min}-x_o}{d_x}$$
+$$t_{exit_x}=
+\frac{x_{max}-x_o}{d_x}$$
+$$t_{entry_y}=
+\frac{y_{min}-y_o}{d_y}$$
+$$t_{exit_y}=
+\frac{y_{max}-y_o}{d_y}$$
+$$t_{entry}=\max\left(
 t_{entry_x},t_{entry_y}
-\right)\\
-t_{exit}=\min\left(
+\right)$$
+$$t_{exit}=\min\left(
 t_{exit_x},t_{exit_y}
 \right)$$
+
 ![](https://i.imgur.com/NMDZDgL.png)
 
 如果 $t_{entry}\leq t_{exit}$，則代表光線有打到 bbox。
