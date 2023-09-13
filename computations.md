@@ -31,8 +31,8 @@
 * 3 FP32_MUL
 
 ### per intersections_a
-* 15 FP32_MUL
-* 13 FP32_ADDSUB
+* 15(+6) FP32_MUL 
+* 13(+3) FP32_ADDSUB
 * 1 FP32_CMP
 
 ### per intersections_b
@@ -43,6 +43,10 @@
 ### per finalize
 * 1 FP32_RCP
 * 3 FP32_MUL
+
+```cpp
+const Vec3<vfloat<M>> tri_Ng = cross(tri_e2,tri_e1); // 6 MUL 3 SUB
+```
 
 ```cpp
 __forceinline bool intersect(const vbool<M>& valid0,
