@@ -663,9 +663,9 @@ int main(int argc, char *argv[]) {
     if (ray_file == nullptr)
         return 0;
 
-    int cluster_map[bvh.node_count];
+    auto cluster_map = std::make_unique<int[]>(bvh.node_count);
     float scaling_factors[cluster_indices.size()];
-    std::fill(cluster_map, cluster_map + bvh.node_count, -1);
+    std::fill(cluster_map.get(), cluster_map.get() + bvh.node_count, -1);
     for (int i = 0; i < cluster_indices.size(); i++) {
         int quant_num = get_quant_num(quant_bits);
         for (int j = 0; j < cluster_indices[i].size(); j++)
@@ -673,7 +673,7 @@ int main(int argc, char *argv[]) {
         scaling_factors[i] = get_scaling_factor(bvh, quant_indices[i], quant_num);
     }
 
-    quant_node_t quant_nodes[bvh.node_count];
+    auto quant_nodes = std::make_unique<quant_node_t[]>(bvh.node_count);
     for (int i = 0; i < bvh.node_count; i++) {
         if (cluster_map[i] == -1) {
             quant_nodes[i].cluster_idx = -1;
@@ -715,7 +715,7 @@ int main(int argc, char *argv[]) {
 
         ray_ = ray;
         bvh::intersections_b = &int_statistics.intersections_b;
-        auto int_result = int_traverse(ray_, int_statistics, bvh, triangles, quant_nodes,
+        auto int_result = int_traverse(ray_, int_statistics, bvh, triangles, quant_nodes.get(),
                                        scaling_factors, quant_indices);
         if (result.has_value()) {
             if (int_result.has_value() &&
