@@ -412,11 +412,17 @@ int main(int argc, char *argv[]) {
                 parent[right_node_idx] = curr_idx;
             }
         } else {
-            float left_switch_t = t_buf[t_buf_map[left_node_idx] + 1];
-            float right_switch_t = t_buf[t_buf_map[right_node_idx] + 1];
+            float left_switch_t;
+            float right_switch_t;
+            float left_full_t;
+            float right_full_t;
 
-            float left_full_t = t_buf[t_buf_map[left_node_idx]];
-            float right_full_t = t_buf[t_buf_map[right_node_idx]];
+            if (!curr_node.is_leaf()) {
+                left_switch_t = t_buf[t_buf_map[left_node_idx] + 1];
+                right_switch_t = t_buf[t_buf_map[right_node_idx] + 1];
+                left_full_t = t_buf[t_buf_map[left_node_idx]];
+                right_full_t = t_buf[t_buf_map[right_node_idx]];
+            }
 
             float &full_t_buf = t_buf[t_buf_map[curr_idx]];
             policy_t &full_t_policy = t_policy[t_buf_map[curr_idx]];
