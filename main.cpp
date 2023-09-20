@@ -8,6 +8,8 @@
 #include "happly/happly.h"
 
 constexpr size_t max_leaf_size = 6;
+constexpr int quant_num = (1 << 8) - 1;
+constexpr int max_q = (1 << 8);
 
 typedef bvh::Bvh<float> bvh_t;
 typedef bvh::Triangle<float> triangle_t;
@@ -21,7 +23,6 @@ typedef bvh::ClosestPrimitiveIntersector<bvh_t, triangle_t> primitive_intersecto
 
 struct arg_t {
     char* model_file;
-    int quant_bits;
     float t_trv_int;
     float t_switch;
     float t_ist;
@@ -32,9 +33,9 @@ enum policy_t {
     STAY, SWITCH
 };
 
-// TODO: restrict num_trigs
 struct int_node_t {
     uint8_t bounds[6];
+    // TODO: here!!
     unsigned int num_trigs : 3;
     unsigned int idx : 13;
 };
@@ -83,7 +84,7 @@ int ceil_to_int(float x) {
     return (int)ceilf(x);
 }
 
-float get_scaling_factor(const bvh_t &bvh, size_t ref_idx, int quant_num) {
+float get_scaling_factor(const bvh_t &bvh, size_t ref_idx) {
     bbox_t quant_bbox = bvh.nodes[ref_idx].bounding_box_proxy().to_bounding_box();
 
     float max_len = 0.0f;
@@ -96,37 +97,32 @@ float get_scaling_factor(const bvh_t &bvh, size_t ref_idx, int quant_num) {
 }
 
 // return: [Qxmin, Qxmax, Qymin, Qymax, Qzmin, Qzmax]
-std::array<uint8_t, 6> get_quant_val(const bvh_t &bvh, size_t node_idx, size_t ref_idx, float scaling_factor,
-                                     int quant_bits) {
+std::array<uint8_t, 6> get_quant_val(const bvh_t &bvh, size_t node_idx, size_t ref_idx, float scaling_factor) {
     bbox_t node_bbox = bvh.nodes[node_idx].bounding_box_proxy().to_bounding_box();
     bbox_t quant_bbox = bvh.nodes[ref_idx].bounding_box_proxy().to_bounding_box();
 
     std::array<uint8_t, 6> ret{};
     for (int i = 0; i < 3; i++) {
-        ret[i * 2] = floor_to_int((node_bbox.min[i] - quant_bbox.min[i]) / scaling_factor);
-        ret[i * 2 + 1] = ceil_to_int((node_bbox.max[i] - quant_bbox.min[i]) / scaling_factor);
-        int max_q = (1 << quant_bits);
-        // TODO: use double to prevent error
-        assert(0 <= ret[i * 2] && ret[i * 2] <= max_q);
-        assert(0 <= ret[i * 2 + 1] && ret[i * 2 + 1] <= max_q);
-        if (ret[i * 2] == max_q)
-            ret[i * 2] = max_q - 1;
-        if (ret[i * 2 + 1] == max_q)
-            ret[i * 2 + 1] = max_q - 1;
+        int min = floor_to_int((node_bbox.min[i] - quant_bbox.min[i]) / scaling_factor);
+        int max = ceil_to_int((node_bbox.max[i] - quant_bbox.min[i]) / scaling_factor);
+        assert(0 <= min && min <= max_q);
+        assert(0 <= max && max <= max_q);
+        if (min == max_q)
+            min = max_q - 1;
+        if (max == max_q)
+            max = max_q - 1;
+        ret[i * 2] = min;
+        ret[i * 2 + 1] = max;
     }
+
     return ret;
 }
 
-int get_quant_num(int quant_bits) {
-    return (1 << quant_bits) - 1;
-}
-
-bbox_t get_quant_bbox(const bvh_t &bvh, size_t node_idx, size_t ref_idx, int quant_bits) {
+bbox_t get_quant_bbox(const bvh_t &bvh, size_t node_idx, size_t ref_idx) {
     bbox_t quant_bbox = bvh.nodes[ref_idx].bounding_box_proxy().to_bounding_box();
 
-    int quant_num = get_quant_num(quant_bits);
-    float scaling_factor = get_scaling_factor(bvh, ref_idx, quant_num);
-    std::array<uint8_t, 6> quant_val = get_quant_val(bvh, node_idx, ref_idx, scaling_factor, quant_bits);
+    float scaling_factor = get_scaling_factor(bvh, ref_idx);
+    std::array<uint8_t, 6> quant_val = get_quant_val(bvh, node_idx, ref_idx, scaling_factor);
 
     bbox_t ret;
     for (int i = 0; i < 3; i++) {
@@ -139,27 +135,25 @@ bbox_t get_quant_bbox(const bvh_t &bvh, size_t node_idx, size_t ref_idx, int qua
 }
 
 arg_t parse_arg(int argc, char *argv[]) {
-    if (argc < 6) {
+    if (argc < 5) {
         std::cerr << "usage: " << argv[0] <<
-                  " MODEL_FILE QUANT_BITS T_TRV_INT T_SWITCH T_IST [RAY_FILE]" << std::endl;
+                  " MODEL_FILE T_TRV_INT T_SWITCH T_IST [RAY_FILE]" << std::endl;
         exit(EXIT_FAILURE);
     }
 
     arg_t arg{};
     arg.model_file = argv[1];
-    arg.quant_bits = std::stoi(argv[2]);
-    arg.t_trv_int = std::stof(argv[3]);
-    arg.t_switch = std::stof(argv[4]);
-    arg.t_ist = std::stof(argv[5]);
+    arg.t_trv_int = std::stof(argv[2]);
+    arg.t_switch = std::stof(argv[3]);
+    arg.t_ist = std::stof(argv[4]);
     std::cout << "MODEL_FILE = " << arg.model_file << std::endl;
-    std::cout << "QUANT_BITS = " << arg.quant_bits << std::endl;
     std::cout << "T_TRV_INT = " << arg.t_trv_int << std::endl;
     std::cout << "T_SWITCH = " << arg.t_switch << std::endl;
     std::cout << "T_IST = " << arg.t_ist << std::endl;
 
     arg.ray_file = nullptr;
-    if (argc >= 7) {
-        arg.ray_file = argv[6];
+    if (argc >= 6) {
+        arg.ray_file = argv[5];
         std::cout << "RAY_FILE = " << arg.ray_file << std::endl;
     }
 }
@@ -195,7 +189,7 @@ bvh_t build_bvh(std::vector<triangle_t> triangles) {
     return bvh;
 }
 
-std::vector<policy_t> get_policy(int quant_bits, float t_trv_int, float t_switch, float t_ist, const bvh_t& bvh) {
+std::vector<policy_t> get_policy(float t_trv_int, float t_switch, float t_ist, const bvh_t& bvh) {
     // stk_1: fill t_buf_size, t_buf_map
     int t_buf_size = 0;
     std::vector<int> t_buf_map(bvh.node_count);
@@ -257,7 +251,7 @@ std::vector<policy_t> get_policy(int quant_bits, float t_trv_int, float t_switch
 
             size_t ref_idx = parent[curr_idx];
             for (int i = 0; ; i++) {
-                bbox_t quant_bbox = get_quant_bbox(bvh, curr_idx, ref_idx, quant_bits);
+                bbox_t quant_bbox = get_quant_bbox(bvh, curr_idx, ref_idx);
                 float half_area = quant_bbox.half_area();
 
                 float &curr_t_buf = t_buf[t_buf_map[curr_idx] + i];
@@ -325,7 +319,7 @@ std::vector<policy_t> get_policy(int quant_bits, float t_trv_int, float t_switch
     return policy;
 }
 
-int_bvh_t build_int_bvh(int quant_bits, const bvh_t& bvh, const std::vector<policy_t>& policy) {
+int_bvh_t build_int_bvh(const bvh_t& bvh, const std::vector<policy_t>& policy) {
     // fill num_clusters, cluster_node_indices, ref_indices
     int num_clusters = 1;
     std::vector<std::vector<size_t>> cluster_node_indices(1);
@@ -369,10 +363,9 @@ int_bvh_t build_int_bvh(int quant_bits, const bvh_t& bvh, const std::vector<poli
     auto scaling_factors = std::make_unique<float[]>(cluster_node_indices.size());
     std::fill(cluster_map.get(), cluster_map.get() + bvh.node_count, -1);
     for (int i = 0; i < cluster_node_indices.size(); i++) {
-        int quant_num = get_quant_num(quant_bits);
         for (int j = 0; j < cluster_node_indices[i].size(); j++)
             cluster_map[cluster_node_indices[i][j]] = i;
-        scaling_factors[i] = get_scaling_factor(bvh, ref_indices[i], quant_num);
+        scaling_factors[i] = get_scaling_factor(bvh, ref_indices[i]);
     }
 
     int_bvh_t int_bvh;
@@ -382,15 +375,14 @@ int_bvh_t build_int_bvh(int quant_bits, const bvh_t& bvh, const std::vector<poli
     for (int i = 0; i < num_clusters; i++) {
         for (int j = 0; j < 6; j++)
             int_bvh.clusters[i].ref_bounds[j] = bvh.nodes[ref_indices[i]].bounds[j];
-        int quant_num = get_quant_num(quant_bits);
-        int_bvh.clusters[i].sx = get_scaling_factor(bvh, ref_indices[i], quant_num);
+        int_bvh.clusters[i].sx = get_scaling_factor(bvh, ref_indices[i]);
         int_bvh.clusters[i].local_nodes = tmp_nodes;
         tmp_nodes += cluster_node_indices[i].size();
 
         // fill local_nodes
         for (int j = 0; j < cluster_node_indices[i].size(); j++) {
             std::array<uint8_t, 6> bounds = get_quant_val(bvh, cluster_node_indices[i][j], ref_indices[i],
-                                                          scaling_factors[i], quant_bits);
+                                                          scaling_factors[i]);
             for (int k = 0; k < 6; k++)
                 int_bvh.clusters[i].local_nodes[j].bounds[k] = bounds[k];
         }
@@ -409,6 +401,6 @@ int main(int argc, char *argv[]) {
     bvh_t bvh = build_bvh(triangles);
 
     std::cout << "clustering..." << std::endl;
-    std::vector<policy_t> policy = get_policy(arg.quant_bits, arg.t_trv_int, arg.t_switch, arg.t_ist, bvh);
-    int_bvh_t int_bvh = build_int_bvh(arg.quant_bits, bvh, policy);
+    std::vector<policy_t> policy = get_policy(arg.t_trv_int, arg.t_switch, arg.t_ist, bvh);
+    int_bvh_t int_bvh = build_int_bvh(bvh, policy);
 }
