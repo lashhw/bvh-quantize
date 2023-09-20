@@ -8,8 +8,7 @@
 #include "happly/happly.h"
 
 constexpr size_t max_leaf_size = 6;
-constexpr int quant_num = (1 << 8) - 1;
-constexpr int max_q = (1 << 8);
+constexpr int qx_max = (1 << 8) - 1;
 
 typedef bvh::Bvh<float> bvh_t;
 typedef bvh::Triangle<float> triangle_t;
@@ -91,7 +90,7 @@ float get_scaling_factor(const bvh_t &bvh, size_t ref_idx) {
     for (int i = 0; i < 3; i++)
         max_len = std::max(max_len, quant_bbox.max[i] - quant_bbox.min[i]);
 
-    float scaling_factor = max_len / (float)quant_num;
+    float scaling_factor = max_len / (float)qx_max;
     assert(scaling_factor > 0.0f);
     return scaling_factor;
 }
@@ -105,12 +104,12 @@ std::array<uint8_t, 6> get_quant_val(const bvh_t &bvh, size_t node_idx, size_t r
     for (int i = 0; i < 3; i++) {
         int min = floor_to_int((node_bbox.min[i] - quant_bbox.min[i]) / scaling_factor);
         int max = ceil_to_int((node_bbox.max[i] - quant_bbox.min[i]) / scaling_factor);
-        assert(0 <= min && min <= max_q);
-        assert(0 <= max && max <= max_q);
-        if (min == max_q)
-            min = max_q - 1;
-        if (max == max_q)
-            max = max_q - 1;
+        assert(0 <= min && min <= qx_max + 1);
+        assert(0 <= max && max <= qx_max + 1);
+        if (min == qx_max + 1)
+            min = qx_max;
+        if (max == qx_max + 1)
+            max = qx_max;
         ret[i * 2] = min;
         ret[i * 2 + 1] = max;
     }
