@@ -28,13 +28,12 @@ struct arg_t {
     char* ray_file;
 };
 
-enum policy_t {
+enum class policy_t {
     STAY, SWITCH
 };
 
 struct int_node_t {
     uint8_t bounds[6];
-    // TODO: here!!
     unsigned int num_trigs : 3;
     unsigned int idx : 13;
 };
@@ -269,10 +268,10 @@ std::vector<policy_t> get_policy(float t_trv_int, float t_switch, float t_ist, c
 
                     if (curr_switch_t < curr_stay_t) {
                         curr_t_buf = curr_switch_t;
-                        curr_t_policy = SWITCH;
+                        curr_t_policy = policy_t::SWITCH;
                     } else {
                         curr_t_buf = curr_stay_t;
-                        curr_t_policy = STAY;
+                        curr_t_policy = policy_t::STAY;
                     }
                 }
 
@@ -287,7 +286,7 @@ std::vector<policy_t> get_policy(float t_trv_int, float t_switch, float t_ist, c
     // stk_3: fill policy
     std::vector<policy_t> policy(bvh.node_count);
     std::stack<std::pair<size_t, int>> stk_3;
-    policy[0] = SWITCH;
+    policy[0] = policy_t::SWITCH;
     stk_3.emplace(root_right_node_idx, 0);
     stk_3.emplace(root_left_node_idx, 0);
     while (!stk_3.empty()) {
@@ -302,13 +301,13 @@ std::vector<policy_t> get_policy(float t_trv_int, float t_switch, float t_ist, c
         size_t right_node_idx = left_node_idx + 1;
 
         switch (t_policy[t_buf_map[curr_idx] + curr_offset]) {
-            case STAY:
-                policy[curr_idx] = STAY;
+            case policy_t::STAY:
+                policy[curr_idx] = policy_t::STAY;
                 stk_3.emplace(right_node_idx, 1 + curr_offset);
                 stk_3.emplace(left_node_idx, 1 + curr_offset);
                 break;
-            case SWITCH:
-                policy[curr_idx] = SWITCH;
+            case policy_t::SWITCH:
+                policy[curr_idx] = policy_t::SWITCH;
                 stk_3.emplace(right_node_idx, 0);
                 stk_3.emplace(left_node_idx, 0);
                 break;
@@ -319,45 +318,44 @@ std::vector<policy_t> get_policy(float t_trv_int, float t_switch, float t_ist, c
 }
 
 int_bvh_t build_int_bvh(const bvh_t& bvh, const std::vector<policy_t>& policy) {
-    // fill num_clusters, cluster_node_indices, ref_indices
-    int num_clusters = 1;
-    std::vector<std::vector<size_t>> cluster_node_indices(1);
-    std::vector<size_t> ref_indices{0};
+    // fill num_clusters, cluster_node_indices, cluster_local_node_indices, ref_indices
+    int num_clusters = 0;
+    std::vector<std::vector<size_t>> cluster_node_indices;
+    std::vector<size_t> local_node_map;  // map node idx to local_node idx
+    std::vector<size_t> ref_indices;
     std::queue<std::tuple<size_t, int, int>> que;
-    node_t& root_node = bvh.nodes[0];
-    size_t root_left_node_idx = root_node.first_child_or_primitive;
-    size_t root_right_node_idx = root_left_node_idx + 1;
-    que.emplace(root_left_node_idx, 0, 1);
-    que.emplace(root_right_node_idx, 0, 1);
+    que.emplace(0, -1, 0);
     while (!que.empty()) {
         auto [curr_idx, curr_cluster, curr_depth] = que.front();
         node_t &curr_node = bvh.nodes[curr_idx];
         que.pop();
 
-        cluster_node_indices[curr_cluster].push_back(curr_idx);
-
         if (!curr_node.is_leaf()) {
-            size_t left_idx = curr_node.first_child_or_primitive;
-            size_t right_idx = left_idx + 1;
-
             int child_cluster;
+            size_t left_node_idx = curr_node.first_child_or_primitive;
+            size_t right_node_idx = left_node_idx + 1;
             switch (policy[curr_idx]) {
-                case STAY:
+                case policy_t::STAY:
                     child_cluster = curr_cluster;
                     break;
-                case SWITCH:
+                case policy_t::SWITCH:
                     child_cluster = num_clusters++;
                     cluster_node_indices.emplace_back();
                     ref_indices.push_back(curr_idx);
                     break;
             }
+            local_node_map[left_node_idx] = cluster_node_indices[child_cluster].size();
+            cluster_node_indices[child_cluster].push_back(left_node_idx);
+            local_node_map[right_node_idx] = cluster_node_indices[child_cluster].size();
+            cluster_node_indices[child_cluster].push_back(right_node_idx);
 
             int child_depth = curr_depth + 1;
-            que.emplace(left_idx, child_cluster, child_depth);
-            que.emplace(right_idx, child_cluster, child_depth);
+            que.emplace(left_node_idx, child_cluster, child_depth);
+            que.emplace(right_node_idx, child_cluster, child_depth);
         }
     }
 
+    // fill cluster_map, scaling_factors
     auto cluster_map = std::make_unique<int[]>(bvh.node_count);
     auto scaling_factors = std::make_unique<float[]>(cluster_node_indices.size());
     std::fill(cluster_map.get(), cluster_map.get() + bvh.node_count, -1);
@@ -367,6 +365,7 @@ int_bvh_t build_int_bvh(const bvh_t& bvh, const std::vector<policy_t>& policy) {
         scaling_factors[i] = get_scaling_factor(bvh, ref_indices[i]);
     }
 
+    // fill int_bvh
     int_bvh_t int_bvh;
     int_bvh.nodes = std::make_unique<int_node_t[]>(bvh.node_count);
     int_bvh.clusters = std::make_unique<int_cluster_t[]>(num_clusters);
@@ -380,10 +379,50 @@ int_bvh_t build_int_bvh(const bvh_t& bvh, const std::vector<policy_t>& policy) {
 
         // fill local_nodes
         for (int j = 0; j < cluster_node_indices[i].size(); j++) {
-            std::array<uint8_t, 6> bounds = get_quant_val(bvh, cluster_node_indices[i][j], ref_indices[i],
-                                                          scaling_factors[i]);
+            size_t curr_node_idx = cluster_node_indices[i][j];
+            node_t& curr_node = bvh.nodes[curr_node_idx];
+            int_node_t& curr_int_node = int_bvh.clusters[i].local_nodes[j];
+
+            // fill bounds
+            std::array<uint8_t, 6> bounds = get_quant_val(bvh, curr_node_idx, ref_indices[i], scaling_factors[i]);
             for (int k = 0; k < 6; k++)
-                int_bvh.clusters[i].local_nodes[j].bounds[k] = bounds[k];
+                curr_int_node.bounds[k] = bounds[k];
+
+            enum class child_type_t {
+                INTERNAL,  // children are in the same cluster and are internal nodes (num_trigs: 0)
+                LEAF,  // children are in the same cluster and are leaf nodes (num_trigs: 1 ~ max_leaf_size)
+                SWITCH  // children are in different clusters (num_trigs: max_leaf_size + 1)
+            } child_type;
+
+            size_t left_node_idx = curr_node.first_child_or_primitive;
+            size_t right_node_idx = left_node_idx + 1;
+            int curr_cluster_idx = cluster_map[left_node_idx];
+            int left_cluster_idx = cluster_map[left_node_idx];
+            int right_cluster_idx = cluster_map[right_node_idx];
+            assert(left_cluster_idx == right_cluster_idx);
+            if (curr_cluster_idx != left_cluster_idx)
+                child_type = child_type_t::SWITCH;
+            else if (curr_node.is_leaf())
+                child_type = child_type_t::LEAF;
+            else
+                child_type = child_type_t::INTERNAL;
+
+            // fill num_trigs, idx
+            switch (child_type) {
+                case child_type_t::INTERNAL:
+                    curr_int_node.num_trigs = 0;
+                    curr_int_node.idx = local_node_map[curr_node_idx];
+                    break;
+                case child_type_t::LEAF:
+                    curr_int_node.num_trigs = bvh.nodes[curr_node_idx].primitive_count;
+                    assert(0 < curr_int_node.num_trigs && curr_int_node.num_trigs <= max_leaf_size);
+                    curr_int_node.idx = bvh.nodes[curr_node_idx].first_child_or_primitive;
+                    break;
+                case child_type_t::SWITCH:
+                    curr_int_node.num_trigs = max_leaf_size + 1;
+                    curr_int_node.idx = cluster_map[bvh.nodes[curr_node_idx].first_child_or_primitive];
+                    break;
+            }
         }
     }
 
