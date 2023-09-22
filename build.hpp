@@ -4,10 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <bvh/triangle.hpp>
-#include <bvh/bvh.hpp>
 #include <bvh/sweep_sah_builder.hpp>
-#include <bvh/single_ray_traverser.hpp>
-#include <bvh/primitive_intersectors.hpp>
 #include "happly/happly.h"
 
 constexpr int num_trigs_bits = 3;
@@ -18,11 +15,8 @@ typedef bvh::Bvh<float> bvh_t;
 typedef bvh::Triangle<float> triangle_t;
 typedef bvh::Vector3<float> vector_t;
 typedef bvh::BoundingBox<float> bbox_t;
-typedef bvh::Ray<float> ray_t;
 typedef bvh::SweepSahBuilder<bvh_t> builder_t;
 typedef bvh_t::Node node_t;
-typedef bvh::SingleRayTraverser<bvh_t> traverser_t;
-typedef bvh::ClosestPrimitiveIntersector<bvh_t, triangle_t> primitive_intersector_t;
 
 struct arg_t {
     char* model_file;
@@ -52,18 +46,6 @@ struct int_bvh_t {
     // clusters[0] is the top cluster
     std::unique_ptr<int_node_t[]> int_nodes;
     std::unique_ptr<int_cluster_t[]> int_clusters;
-};
-
-struct intersection_result_t {
-    size_t triangle_idx;
-    triangle_t::Intersection intersection;
-};
-
-struct statistics_t {
-    traverser_t::Statistics s;
-    size_t clusters = 0;
-    size_t recompute_qymax = 0;
-    size_t intersections_b = 0;
 };
 
 int floor_to_int(float x) {
@@ -158,6 +140,8 @@ arg_t parse_arg(int argc, char *argv[]) {
         arg.ray_file = argv[5];
         std::cout << "RAY_FILE = " << arg.ray_file << std::endl;
     }
+
+    return arg;
 }
 
 std::vector<triangle_t> load_triangles(const char* model_file) {
