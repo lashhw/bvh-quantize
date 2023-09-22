@@ -321,7 +321,10 @@ std::vector<policy_t> get_policy(float t_trv_int, float t_switch, float t_ist, c
     return policy;
 }
 
-int_bvh_t build_int_bvh(const bvh_t& bvh, const std::vector<policy_t>& policy) {
+int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const bvh_t& bvh) {
+    // fill policy
+    std::vector<policy_t> policy = get_policy(t_trv_int, t_switch, t_ist, bvh);
+
     // que: fill num_clusters, cluster_node_indices, ref_indices, node_offset_map
     int num_clusters = 0;
     std::vector<std::vector<size_t>> cluster_node_indices;
