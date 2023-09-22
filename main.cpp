@@ -41,7 +41,7 @@ struct int_node_t {
 struct int_cluster_t {
     float ref_bounds[6];
     float sx;
-    int_node_t* local_nodes;
+    uint32_t node_offset;
 };
 
 struct int_bvh_t {
@@ -369,19 +369,19 @@ int_bvh_t build_int_bvh(const bvh_t& bvh, const std::vector<policy_t>& policy) {
     int_bvh_t int_bvh;
     int_bvh.nodes = std::make_unique<int_node_t[]>(bvh.node_count);
     int_bvh.clusters = std::make_unique<int_cluster_t[]>(num_clusters);
-    int_node_t* tmp_nodes = int_bvh.nodes.get();
+    size_t tmp_node_offset = 0;
     for (int i = 0; i < num_clusters; i++) {
         for (int j = 0; j < 6; j++)
             int_bvh.clusters[i].ref_bounds[j] = bvh.nodes[ref_indices[i]].bounds[j];
         int_bvh.clusters[i].sx = get_scaling_factor(bvh, ref_indices[i]);
-        int_bvh.clusters[i].local_nodes = tmp_nodes;
-        tmp_nodes += cluster_node_indices[i].size();
+        int_bvh.clusters[i].node_offset = tmp_node_offset;
+        tmp_node_offset += cluster_node_indices[i].size();
 
         // fill local_nodes
         for (int j = 0; j < cluster_node_indices[i].size(); j++) {
             size_t curr_node_idx = cluster_node_indices[i][j];
             node_t& curr_node = bvh.nodes[curr_node_idx];
-            int_node_t& curr_int_node = int_bvh.clusters[i].local_nodes[j];
+            int_node_t& curr_int_node = int_bvh.nodes[int_bvh.clusters[i].node_offset + j];
 
             // fill bounds
             std::array<uint8_t, 6> bounds = get_quant_val(bvh, curr_node_idx, ref_indices[i], scaling_factors[i]);
