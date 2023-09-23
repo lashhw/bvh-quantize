@@ -549,8 +549,8 @@ void gen_graphviz(const int_bvh_t& int_bvh) {
 
         que.emplace(left_node_idx, child_cluster_idx, child_color, child_depth);
         que.emplace(right_node_idx, child_cluster_idx, child_color, child_depth);
-        graph_fs << "    " << root_left_node_idx << " [depth=" << child_depth << "]\n";
-        graph_fs << "    " << root_right_node_idx << " [depth=" << child_depth << "]\n";
+        graph_fs << "    " << left_node_idx << " [depth=" << child_depth << "]\n";
+        graph_fs << "    " << right_node_idx << " [depth=" << child_depth << "]\n";
         graph_fs << "    " << curr_node_idx << " -> " << left_node_idx << " [color=" << cmap[child_color] << "]\n";
         graph_fs << "    " << curr_node_idx << " -> " << right_node_idx << " [color=" << cmap[child_color] << "]\n";
     }
