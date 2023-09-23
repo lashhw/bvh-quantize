@@ -59,8 +59,8 @@ struct int_cluster_t {
 };
 
 struct int_bvh_t {
-    // int_clusters[0] is the top cluster
-    std::unique_ptr<int_cluster_t[]> int_clusters;
+    // clusters[0] is the top cluster
+    std::unique_ptr<int_cluster_t[]> clusters;
     std::unique_ptr<float[]> scaling_factors;
     std::unique_ptr<trig_t[]> trigs;
     std::unique_ptr<int_node_t[]> int_nodes;
@@ -373,7 +373,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
 
     // fill int_bvh, local_trig_idx_map
     int_bvh_t int_bvh;
-    int_bvh.int_clusters = std::make_unique<int_cluster_t[]>(num_clusters);
+    int_bvh.clusters = std::make_unique<int_cluster_t[]>(num_clusters);
     int_bvh.scaling_factors = std::make_unique<float[]>(num_clusters);
     int_bvh.trigs = std::make_unique<trig_t[]>(trigs.size());
     int_bvh.int_nodes = std::make_unique<int_node_t[]>(bvh.node_count);
@@ -381,11 +381,11 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
     size_t tmp_node_offset = 0;
     size_t tmp_trig_offset = 0;
     for (int i = 0; i < num_clusters; i++) {
-        // fill int_bvh.int_clusters[i]
+        // fill int_bvh.clusters[i]
         for (int j = 0; j < 6; j++)
-            int_bvh.int_clusters[i].ref_bounds[j] = bvh.nodes[ref_indices[i]].bounds[j];
-        int_bvh.int_clusters[i].node_offset = tmp_node_offset;
-        int_bvh.int_clusters[i].trig_offset = tmp_trig_offset;
+            int_bvh.clusters[i].ref_bounds[j] = bvh.nodes[ref_indices[i]].bounds[j];
+        int_bvh.clusters[i].node_offset = tmp_node_offset;
+        int_bvh.clusters[i].trig_offset = tmp_trig_offset;
 
         // fill int_bvh.scaling_factors[i]
         int_bvh.scaling_factors[i] = scaling_factors[i];
