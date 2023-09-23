@@ -13,7 +13,7 @@
 //   SWITCH: |0|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|
 //           \a/\ b /\           c           /
 // for INTERNAL:
-//   -: child_node_idx
+//   -: left_node_idx
 // for LEAF:
 //   *: num_trigs
 //   -: trig_idx
@@ -29,7 +29,7 @@ constexpr int max_cluster_size = (1 << 15);
 constexpr int qx_max = (1 << 8) - 1;
 
 typedef bvh::Bvh<float> bvh_t;
-typedef bvh::Triangle<float> triangle_t;
+typedef bvh::Triangle<float> trig_t;
 typedef bvh::Vector3<float> vector_t;
 typedef bvh::BoundingBox<float> bbox_t;
 typedef bvh::SweepSahBuilder<bvh_t> builder_t;
@@ -55,7 +55,7 @@ struct int_node_t {
 struct int_cluster_t {
     float ref_bounds[6];
     uint32_t node_offset;
-    uint32_t trig_idx_offset;
+    uint32_t trig_offset;
 };
 
 struct int_bvh_t {
@@ -63,7 +63,7 @@ struct int_bvh_t {
     std::unique_ptr<int_node_t[]> int_nodes;
     std::unique_ptr<int_cluster_t[]> int_clusters;
     std::unique_ptr<float[]> scaling_factors;
-    std::unique_ptr<size_t[]> trig_indices;
+    std::unique_ptr<trig_t[]> trigs;
 };
 
 int floor_to_int(float x) {
@@ -162,25 +162,25 @@ arg_t parse_arg(int argc, char *argv[]) {
     return arg;
 }
 
-std::vector<triangle_t> load_triangles(const char* model_file) {
+std::vector<trig_t> load_trigs(const char* model_file) {
     happly::PLYData ply_data(model_file);
     std::vector<std::array<double, 3>> v_pos = ply_data.getVertexPositions();
     std::vector<std::vector<size_t>> f_idx = ply_data.getFaceIndices<size_t>();
 
-    std::vector<triangle_t> triangles;
+    std::vector<trig_t> trigs;
     for (auto &face : f_idx) {
-        triangles.emplace_back(
+        trigs.emplace_back(
             vector_t((float)v_pos[face[0]][0], (float)v_pos[face[0]][1], (float)v_pos[face[0]][2]),
             vector_t((float)v_pos[face[1]][0], (float)v_pos[face[1]][1], (float)v_pos[face[1]][2]),
             vector_t((float)v_pos[face[2]][0], (float)v_pos[face[2]][1], (float)v_pos[face[2]][2])
         );
     }
-    return triangles;
+    return trigs;
 }
 
-bvh_t build_bvh(const std::vector<triangle_t>& triangles) {
-    auto [bboxes, centers] = bvh::compute_bounding_boxes_and_centers(triangles.data(), triangles.size());
-    auto global_bbox = bvh::compute_bounding_boxes_union(bboxes.get(), triangles.size());
+bvh_t build_bvh(const std::vector<trig_t>& trigs) {
+    auto [bboxes, centers] = bvh::compute_bounding_boxes_and_centers(trigs.data(), trigs.size());
+    auto global_bbox = bvh::compute_bounding_boxes_union(bboxes.get(), trigs.size());
     std::cout << "global_bbox = ("
               << global_bbox.min[0] << ", " << global_bbox.min[1] << ", " << global_bbox.min[2] << "), ("
               << global_bbox.max[0] << ", " << global_bbox.max[1] << ", " << global_bbox.max[2] << ")" << std::endl;
@@ -188,7 +188,7 @@ bvh_t build_bvh(const std::vector<triangle_t>& triangles) {
     bvh_t bvh;
     builder_t builder(bvh);
     builder.max_leaf_size = max_trig_in_leaf_size;
-    builder.build(global_bbox, bboxes.get(), centers.get(), triangles.size());
+    builder.build(global_bbox, bboxes.get(), centers.get(), trigs.size());
 
     return bvh;
 }
@@ -318,7 +318,8 @@ std::vector<policy_t> get_policy(float t_trv_int, float t_switch, float t_ist, c
     return policy;
 }
 
-int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, int num_trigs, const bvh_t& bvh) {
+int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std::vector<trig_t>& trigs,
+                        const bvh_t& bvh) {
     // fill policy
     std::vector<policy_t> policy = get_policy(t_trv_int, t_switch, t_ist, bvh);
 
@@ -374,7 +375,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, int num_tr
     int_bvh.int_nodes = std::make_unique<int_node_t[]>(bvh.node_count);
     int_bvh.int_clusters = std::make_unique<int_cluster_t[]>(num_clusters);
     int_bvh.scaling_factors = std::make_unique<float[]>(num_clusters);
-    int_bvh.trig_indices = std::make_unique<size_t[]>(num_trigs);
+    int_bvh.trigs = std::make_unique<trig_t[]>(trigs.size());
     std::vector<size_t> trig_idx_map(bvh.node_count);
     size_t tmp_node_offset = 0;
     size_t tmp_trig_idx_offset = 0;
@@ -383,7 +384,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, int num_tr
         for (int j = 0; j < 6; j++)
             int_bvh.int_clusters[i].ref_bounds[j] = bvh.nodes[ref_indices[i]].bounds[j];
         int_bvh.int_clusters[i].node_offset = tmp_node_offset;
-        int_bvh.int_clusters[i].trig_idx_offset = tmp_trig_idx_offset;
+        int_bvh.int_clusters[i].trig_offset = tmp_trig_idx_offset;
         tmp_node_offset += cluster_node_indices[i].size();
 
         // fill int_bvh.scaling_factors[i]
@@ -395,7 +396,8 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, int num_tr
             if (curr_node.is_leaf()) {
                 trig_idx_map[curr_node_idx] = tmp_trig_idx_offset;
                 for (int j = 0; j < curr_node.primitive_count; j++) {
-                    int_bvh.trig_indices[tmp_trig_idx_offset] = bvh.primitive_indices[curr_node.first_child_or_primitive + j];
+                    size_t trig_idx = bvh.primitive_indices[curr_node.first_child_or_primitive + j];
+                    int_bvh.trigs[tmp_trig_idx_offset] = trigs[trig_idx];
                     tmp_trig_idx_offset++;
                 }
             }
