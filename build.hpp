@@ -502,14 +502,14 @@ void gen_graphviz(const int_bvh_t& int_bvh) {
     std::ofstream graph_fs("graph.dot");
     graph_fs << "digraph bvh {\n";
     graph_fs << "    layout=twopi\n";
-    graph_fs << "    root=0\n";
+    graph_fs << "    root=R\n";
     graph_fs << "    node [shape=point]\n";
     graph_fs << "    edge [arrowhead=none]\n";
-    graph_fs << "    0 [shape=circle label=root depth=0]\n";
+    graph_fs << "    R [shape=circle label=root depth=0]\n";
     graph_fs << "    " << root_left_node_idx << " [depth=1]\n";
     graph_fs << "    " << root_right_node_idx << " [depth=1]\n";
-    graph_fs << "    0 -> " << root_left_node_idx << " [color=" << cmap[0] << "]\n";
-    graph_fs << "    0 -> " << root_right_node_idx << " [color=" << cmap[0] << "]\n";
+    graph_fs << "    R -> " << root_left_node_idx << " [color=" << cmap[0] << "]\n";
+    graph_fs << "    R -> " << root_right_node_idx << " [color=" << cmap[0] << "]\n";
 
     std::queue<std::tuple<int, int, int, int>> que;
     que.emplace(root_left_node_idx, 0, 1, 1);
