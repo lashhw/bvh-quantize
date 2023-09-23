@@ -396,11 +396,11 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
             node_t& curr_node = bvh.nodes[curr_node_idx];
             if (curr_node.is_leaf()) {
                 local_trig_idx_map[curr_node_idx] = tmp_local_trig_offset;
-                tmp_local_trig_offset++;
                 for (int j = 0; j < curr_node.primitive_count; j++) {
                     size_t trig_idx = bvh.primitive_indices[curr_node.first_child_or_primitive + j];
                     int_bvh.trigs[tmp_trig_offset] = trigs[trig_idx];
                     tmp_trig_offset++;
+                    tmp_local_trig_offset++;
                 }
             }
         }
@@ -413,8 +413,8 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
 
             // fill curr_int_node.bounds
             std::array<uint8_t, 6> bounds = get_int_bounds(bvh, curr_node_idx, ref_indices[i], scaling_factors[i]);
-            for (int k = 0; k < 6; k++)
-                curr_int_node.bounds[k] = bounds[k];
+            for (int j = 0; j < 6; j++)
+                curr_int_node.bounds[j] = bounds[j];
 
             enum class child_type_t {
                 INTERNAL,  // children are in the same cluster and are internal nodes
@@ -422,11 +422,11 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
                 SWITCH     // children are in different cluster
             } child_type;
 
+            size_t left_node_idx = curr_node.first_child_or_primitive;
+            size_t right_node_idx = left_node_idx + 1;
             if (curr_node.is_leaf()) {
                 child_type = child_type_t::LEAF;
             } else {
-                size_t left_node_idx = curr_node.first_child_or_primitive;
-                size_t right_node_idx = left_node_idx + 1;
                 int curr_cluster_idx = cluster_idx_map[curr_node_idx];
                 int left_cluster_idx = cluster_idx_map[left_node_idx];
                 int right_cluster_idx = cluster_idx_map[right_node_idx];
@@ -444,7 +444,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
             // fill curr_int_node.data
             switch (child_type) {
                 case child_type_t::INTERNAL: {
-                    size_t field_c = local_node_idx_map[curr_node_idx];
+                    size_t field_c = local_node_idx_map[left_node_idx];
                     assert(field_c < max_node_in_cluster_size);
                     curr_int_node.data = (1 << 15) | field_c;
                     break;
@@ -458,7 +458,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
                     break;
                 }
                 case child_type_t::SWITCH: {
-                    size_t field_bc = cluster_idx_map[curr_node.first_child_or_primitive];
+                    size_t field_bc = cluster_idx_map[left_node_idx];
                     assert(field_bc < max_cluster_size);
                     curr_int_node.data = field_bc;
                     break;
