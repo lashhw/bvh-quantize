@@ -47,6 +47,12 @@ enum class policy_t {
     STAY, SWITCH
 };
 
+enum class child_type_t {
+    INTERNAL,  // children are in the same cluster and are internal nodes
+    LEAF,      // children are in the same cluster and are leaf nodes
+    SWITCH     // children are in different cluster
+};
+
 struct int_node_t {
     uint8_t bounds[6];
     uint16_t data;
@@ -63,7 +69,13 @@ struct int_bvh_t {
     std::unique_ptr<int_cluster_t[]> clusters;
     std::unique_ptr<float[]> scaling_factors;
     std::unique_ptr<trig_t[]> trigs;
-    std::unique_ptr<int_node_t[]> int_nodes;
+    std::unique_ptr<int_node_t[]> nodes;
+};
+
+struct decoded_data_t {
+    child_type_t child_type;
+    uint8_t num_trigs;
+    uint16_t idx;
 };
 
 int floor_to_int(float x) {
@@ -376,7 +388,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
     int_bvh.clusters = std::make_unique<int_cluster_t[]>(num_clusters);
     int_bvh.scaling_factors = std::make_unique<float[]>(num_clusters);
     int_bvh.trigs = std::make_unique<trig_t[]>(trigs.size());
-    int_bvh.int_nodes = std::make_unique<int_node_t[]>(bvh.node_count);
+    int_bvh.nodes = std::make_unique<int_node_t[]>(bvh.node_count);
     std::vector<size_t> local_trig_idx_map(bvh.node_count);
     size_t tmp_node_offset = 0;
     size_t tmp_trig_offset = 0;
@@ -405,10 +417,10 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
             }
         }
 
-        // fill int_bvh.int_nodes
+        // fill int_bvh.nodes
         for (size_t curr_node_idx : cluster_node_indices[i]) {
             node_t& curr_node = bvh.nodes[curr_node_idx];
-            int_node_t& curr_int_node = int_bvh.int_nodes[tmp_node_offset];
+            int_node_t& curr_int_node = int_bvh.nodes[tmp_node_offset];
             tmp_node_offset++;
 
             // fill curr_int_node.bounds
@@ -416,12 +428,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
             for (int j = 0; j < 6; j++)
                 curr_int_node.bounds[j] = bounds[j];
 
-            enum class child_type_t {
-                INTERNAL,  // children are in the same cluster and are internal nodes
-                LEAF,      // children are in the same cluster and are leaf nodes
-                SWITCH     // children are in different cluster
-            } child_type;
-
+            child_type_t child_type;
             size_t left_node_idx = curr_node.first_child_or_primitive;
             size_t right_node_idx = left_node_idx + 1;
             if (curr_node.is_leaf()) {
@@ -446,7 +453,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
                 case child_type_t::INTERNAL: {
                     size_t field_c = local_node_idx_map[left_node_idx];
                     assert(field_c < max_node_in_cluster_size);
-                    curr_int_node.data = (1 << 15) | field_c;
+                    curr_int_node.data = 0x8000 | field_c;
                     break;
                 }
                 case child_type_t::LEAF: {
@@ -454,7 +461,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
                     size_t field_c = local_trig_idx_map[curr_node_idx];
                     assert(field_b <= max_trig_in_leaf_size);
                     assert(field_c < max_trig_in_cluster_size);
-                    curr_int_node.data = (1 << 15) | (field_b << field_c_bits) | field_c;
+                    curr_int_node.data = 0x8000 | (field_b << field_c_bits) | field_c;
                     break;
                 }
                 case child_type_t::SWITCH: {
@@ -468,6 +475,91 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
     }
 
     return int_bvh;
+}
+
+decoded_data_t decode_data(uint16_t data) {
+    decoded_data_t decoded_data{};
+    if (data & 0x8000) {
+        int field_b = ((data & 0x7fff) >> field_c_bits);
+        int field_c = (data & ((1 << field_c_bits) - 1));
+        if (field_b == 0)
+            decoded_data.child_type = child_type_t::INTERNAL;
+        else
+            decoded_data.child_type = child_type_t::LEAF;
+        decoded_data.idx = field_c;
+    } else {
+        decoded_data.child_type = child_type_t::SWITCH;
+        decoded_data.idx = data;
+    }
+}
+
+void gen_graphviz(const int_bvh_t& int_bvh) {
+    uint32_t root_left_node_idx = int_bvh.clusters[0].node_offset;
+    uint32_t root_right_node_idx = root_left_node_idx + 1;
+    std::array<std::string, 2> cmap = {"black", "red"};
+
+    std::ofstream graph_fs("graph.dot");
+    graph_fs << "digraph bvh {\n";
+    graph_fs << "    layout=twopi\n";
+    graph_fs << "    root=0\n";
+    graph_fs << "    node [shape=point]\n";
+    graph_fs << "    edge [arrowhead=none]\n";
+    graph_fs << "    0 [shape=circle label=root depth=0]\n";
+    graph_fs << "    " << root_left_node_idx << " [depth=1]\n";
+    graph_fs << "    " << root_right_node_idx << " [depth=1]\n";
+    graph_fs << "    0 -> " << root_left_node_idx << "[color=" << cmap[0] << "]\n";
+    graph_fs << "    0 -> " << root_right_node_idx << "[color=" << cmap[0] << "]\n";
+
+    std::queue<std::tuple<int, int, int, int>> que;
+    que.emplace(root_left_node_idx, 0, 1, 1);
+    que.emplace(root_right_node_idx, 0, 1, 1);
+    while (!que.empty()) {
+        auto [curr_node_idx, curr_cluster_idx, curr_color, curr_depth] = que.front();
+        int_node_t& curr_node = int_bvh.nodes[curr_node_idx];
+        int_cluster_t& curr_cluster = int_bvh.clusters[curr_cluster_idx];
+        que.pop();
+
+        decoded_data_t decoded_data = decode_data(curr_node.data);
+
+        int child_cluster_idx;
+        uint32_t left_node_idx;
+        uint32_t right_node_idx;
+        int child_color;
+        int child_depth = curr_depth + 1;
+        switch (decoded_data.child_type) {
+            case child_type_t::INTERNAL: {
+                child_cluster_idx = curr_cluster_idx;
+                left_node_idx = curr_cluster.node_offset + decoded_data.idx;
+                right_node_idx = left_node_idx + 1;
+                child_color = curr_color;
+                break;
+            }
+            case child_type_t::LEAF: {
+                continue;  // this continue is related to the while loop
+            }
+            case child_type_t::SWITCH: {
+                child_cluster_idx = decoded_data.idx;
+                int_cluster_t& child_cluster = int_bvh.clusters[child_cluster_idx];
+                left_node_idx = child_cluster.node_offset;
+                right_node_idx = left_node_idx + 1;
+                child_color = (curr_color + 1) % 2;
+                break;
+            }
+        }
+
+        que.emplace(left_node_idx, child_cluster_idx, child_color, child_depth);
+        que.emplace(right_node_idx, child_cluster_idx, child_color, child_depth);
+        graph_fs << "    " << root_left_node_idx << " [depth=" << child_depth << "]\n";
+        graph_fs << "    " << root_right_node_idx << " [depth=" << child_depth << "]\n";
+        graph_fs << "    " << curr_node_idx << " -> " << left_node_idx << " [color=" << cmap[child_color] << "]\n";
+        graph_fs << "    " << curr_node_idx << " -> " << right_node_idx << " [color=" << cmap[child_color] << "]\n";
+    }
+
+    graph_fs << "}";
+}
+
+void gen_visualization(const int_bvh_t& int_bvh) {
+
 }
 
 #endif //BUILD_HPP
