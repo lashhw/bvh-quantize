@@ -60,10 +60,10 @@ struct int_cluster_t {
 
 struct int_bvh_t {
     // int_clusters[0] is the top cluster
-    std::unique_ptr<int_node_t[]> int_nodes;
     std::unique_ptr<int_cluster_t[]> int_clusters;
     std::unique_ptr<float[]> scaling_factors;
     std::unique_ptr<trig_t[]> trigs;
+    std::unique_ptr<int_node_t[]> int_nodes;
 };
 
 int floor_to_int(float x) {
@@ -323,24 +323,22 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
     // fill policy
     std::vector<policy_t> policy = get_policy(t_trv_int, t_switch, t_ist, bvh);
 
-    // que: fill num_clusters, cluster_node_indices, ref_indices, node_offset_map
+    // que: fill num_clusters, cluster_node_indices, ref_indices, local_node_idx_map
     int num_clusters = 0;
     std::vector<std::vector<size_t>> cluster_node_indices;
     std::vector<size_t> ref_indices;
-    std::vector<size_t> node_offset_map(bvh.node_count);
+    std::vector<size_t> local_node_idx_map(bvh.node_count);
     std::queue<std::pair<size_t, int>> que;
     que.emplace(0, -1);
     while (!que.empty()) {
         auto [curr_node_idx, curr_cluster_idx] = que.front();
-        node_t &curr_node = bvh.nodes[curr_node_idx];
+        node_t& curr_node = bvh.nodes[curr_node_idx];
         que.pop();
 
         if (curr_node.is_leaf())
             continue;
 
         int child_cluster_idx;
-        size_t left_node_idx = curr_node.first_child_or_primitive;
-        size_t right_node_idx = left_node_idx + 1;
         switch (policy[curr_node_idx]) {
             case policy_t::STAY:
                 child_cluster_idx = curr_cluster_idx;
@@ -352,9 +350,12 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
                 ref_indices.push_back(curr_node_idx);
                 break;
         }
-        node_offset_map[left_node_idx] = cluster_node_indices[child_cluster_idx].size();
+
+        size_t left_node_idx = curr_node.first_child_or_primitive;
+        size_t right_node_idx = left_node_idx + 1;
+        local_node_idx_map[left_node_idx] = cluster_node_indices[child_cluster_idx].size();
         cluster_node_indices[child_cluster_idx].push_back(left_node_idx);
-        node_offset_map[right_node_idx] = cluster_node_indices[child_cluster_idx].size();
+        local_node_idx_map[right_node_idx] = cluster_node_indices[child_cluster_idx].size();
         cluster_node_indices[child_cluster_idx].push_back(right_node_idx);
 
         que.emplace(left_node_idx, child_cluster_idx);
@@ -370,44 +371,45 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
         scaling_factors[i] = get_scaling_factor(bvh, ref_indices[i]);
     }
 
-    // fill int_bvh, trig_idx_map
+    // fill int_bvh, local_trig_idx_map
     int_bvh_t int_bvh;
-    int_bvh.int_nodes = std::make_unique<int_node_t[]>(bvh.node_count);
     int_bvh.int_clusters = std::make_unique<int_cluster_t[]>(num_clusters);
     int_bvh.scaling_factors = std::make_unique<float[]>(num_clusters);
     int_bvh.trigs = std::make_unique<trig_t[]>(trigs.size());
-    std::vector<size_t> trig_idx_map(bvh.node_count);
+    int_bvh.int_nodes = std::make_unique<int_node_t[]>(bvh.node_count);
+    std::vector<size_t> local_trig_idx_map(bvh.node_count);
     size_t tmp_node_offset = 0;
-    size_t tmp_trig_idx_offset = 0;
+    size_t tmp_trig_offset = 0;
     for (int i = 0; i < num_clusters; i++) {
         // fill int_bvh.int_clusters[i]
         for (int j = 0; j < 6; j++)
             int_bvh.int_clusters[i].ref_bounds[j] = bvh.nodes[ref_indices[i]].bounds[j];
         int_bvh.int_clusters[i].node_offset = tmp_node_offset;
-        int_bvh.int_clusters[i].trig_offset = tmp_trig_idx_offset;
-        tmp_node_offset += cluster_node_indices[i].size();
+        int_bvh.int_clusters[i].trig_offset = tmp_trig_offset;
 
         // fill int_bvh.scaling_factors[i]
         int_bvh.scaling_factors[i] = scaling_factors[i];
 
-        // fill int_bvh.trig_indices[i];
+        // fill int_bvh.trigs
+        int tmp_local_trig_offset = 0;
         for (size_t curr_node_idx : cluster_node_indices[i]) {
             node_t& curr_node = bvh.nodes[curr_node_idx];
             if (curr_node.is_leaf()) {
-                trig_idx_map[curr_node_idx] = tmp_trig_idx_offset;
+                local_trig_idx_map[curr_node_idx] = tmp_local_trig_offset;
+                tmp_local_trig_offset++;
                 for (int j = 0; j < curr_node.primitive_count; j++) {
                     size_t trig_idx = bvh.primitive_indices[curr_node.first_child_or_primitive + j];
-                    int_bvh.trigs[tmp_trig_idx_offset] = trigs[trig_idx];
-                    tmp_trig_idx_offset++;
+                    int_bvh.trigs[tmp_trig_offset] = trigs[trig_idx];
+                    tmp_trig_offset++;
                 }
             }
         }
 
         // fill int_bvh.int_nodes
-        for (int j = 0; j < cluster_node_indices[i].size(); j++) {
-            size_t curr_node_idx = cluster_node_indices[i][j];
+        for (size_t curr_node_idx : cluster_node_indices[i]) {
             node_t& curr_node = bvh.nodes[curr_node_idx];
-            int_node_t& curr_int_node = int_bvh.int_nodes[int_bvh.int_clusters[i].node_offset + j];
+            int_node_t& curr_int_node = int_bvh.int_nodes[tmp_node_offset];
+            tmp_node_offset++;
 
             // fill curr_int_node.bounds
             std::array<uint8_t, 6> bounds = get_int_bounds(bvh, curr_node_idx, ref_indices[i], scaling_factors[i]);
@@ -417,7 +419,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
             enum class child_type_t {
                 INTERNAL,  // children are in the same cluster and are internal nodes
                 LEAF,      // children are in the same cluster and are leaf nodes
-                SWITCH     // children are in different clusters
+                SWITCH     // children are in different cluster
             } child_type;
 
             if (curr_node.is_leaf()) {
@@ -430,26 +432,29 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
                 int right_cluster_idx = cluster_idx_map[right_node_idx];
                 assert(left_cluster_idx == right_cluster_idx);
 
-                if (curr_cluster_idx != left_cluster_idx)
+                if (curr_cluster_idx != left_cluster_idx) {
+                    assert(policy[curr_node_idx] == policy_t::SWITCH);
                     child_type = child_type_t::SWITCH;
-                else
+                } else {
+                    assert(policy[curr_node_idx] == policy_t::STAY);
                     child_type = child_type_t::INTERNAL;
+                }
             }
 
-            // fill curr_int_node.num_trigs, curr_int_node.idx
+            // fill curr_int_node.data
             switch (child_type) {
                 case child_type_t::INTERNAL: {
-                    size_t field_c = node_offset_map[curr_node_idx];
+                    size_t field_c = local_node_idx_map[curr_node_idx];
                     assert(field_c < max_node_in_cluster_size);
-                    curr_int_node.data = 0x8000 | field_c;
+                    curr_int_node.data = (1 << 15) | field_c;
                     break;
                 }
                 case child_type_t::LEAF: {
                     size_t field_b = bvh.nodes[curr_node_idx].primitive_count;
-                    size_t field_c = trig_idx_map[curr_node_idx];
+                    size_t field_c = local_trig_idx_map[curr_node_idx];
                     assert(field_b <= max_trig_in_leaf_size);
                     assert(field_c < max_trig_in_cluster_size);
-                    curr_int_node.data = 0x8000 | (field_b << field_c_bits) | field_c;
+                    curr_int_node.data = (1 << 15) | (field_b << field_c_bits) | field_c;
                     break;
                 }
                 case child_type_t::SWITCH: {
