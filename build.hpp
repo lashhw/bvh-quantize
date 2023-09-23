@@ -66,6 +66,7 @@ struct int_cluster_t {
 
 struct int_bvh_t {
     // clusters[0] is the top cluster
+    int num_clusters = 0;
     std::unique_ptr<int_cluster_t[]> clusters;
     std::unique_ptr<float[]> scaling_factors;
     std::unique_ptr<trig_t[]> trigs;
@@ -132,10 +133,8 @@ std::array<uint8_t, 6> get_int_bounds(const bvh_t &bvh, size_t node_idx, size_t 
     return ret;
 }
 
-bbox_t get_quant_bbox(const bvh_t &bvh, size_t node_idx, size_t ref_idx) {
+bbox_t get_quant_bbox(const bvh_t &bvh, size_t node_idx, size_t ref_idx, float scaling_factor) {
     bbox_t ref_bbox = bvh.nodes[ref_idx].bounding_box_proxy().to_bounding_box();
-
-    float scaling_factor = get_scaling_factor(bvh, ref_idx);
     std::array<uint8_t, 6> int_bounds = get_int_bounds(bvh, node_idx, ref_idx, scaling_factor);
 
     bbox_t ret;
@@ -259,7 +258,8 @@ std::vector<policy_t> get_policy(float t_trv_int, float t_switch, float t_ist, c
         } else {
             size_t ref_idx = parent[curr_node_idx];
             for (int i = 0; ; i++) {
-                bbox_t quant_bbox = get_quant_bbox(bvh, curr_node_idx, ref_idx);
+                float scaling_factor = get_scaling_factor(bvh, ref_idx);
+                bbox_t quant_bbox = get_quant_bbox(bvh, curr_node_idx, ref_idx, scaling_factor);
                 float half_area = quant_bbox.half_area();
 
                 float& curr_t_buf = t_buf[t_buf_idx_map[curr_node_idx] + i];
@@ -385,6 +385,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
 
     // fill int_bvh, local_trig_idx_map
     int_bvh_t int_bvh;
+    int_bvh.num_clusters = num_clusters;
     int_bvh.clusters = std::make_unique<int_cluster_t[]>(num_clusters);
     int_bvh.scaling_factors = std::make_unique<float[]>(num_clusters);
     int_bvh.trigs = std::make_unique<trig_t[]>(trigs.size());
@@ -512,8 +513,8 @@ void gen_graphviz(const int_bvh_t& int_bvh) {
     graph_fs << "    R -> " << root_right_node_idx << " [color=" << cmap[0] << "]\n";
 
     std::queue<std::tuple<int, int, int, int>> que;
-    que.emplace(root_left_node_idx, 0, 1, 1);
-    que.emplace(root_right_node_idx, 0, 1, 1);
+    que.emplace(root_left_node_idx, 0, 0, 1);
+    que.emplace(root_right_node_idx, 0, 0, 1);
     while (!que.empty()) {
         auto [curr_node_idx, curr_cluster_idx, curr_color, curr_depth] = que.front();
         int_node_t& curr_node = int_bvh.nodes[curr_node_idx];
@@ -559,8 +560,94 @@ void gen_graphviz(const int_bvh_t& int_bvh) {
     graph_fs << "}";
 }
 
-void gen_visualization(const int_bvh_t& int_bvh) {
+void gen_visualization(const bvh_t& bvh, const int_bvh_t& int_bvh) {
+    std::ofstream node_offsets_fs("node_offsets.bin", std::ios::binary);
+    for (int i = 0; i < int_bvh.num_clusters; i++) {
+        uint32_t offset = int_bvh.clusters[i].node_offset;
+        node_offsets_fs.write((char*)(&offset), sizeof(offset));
+    }
 
+    // fill full_bboxes_by_cluster, quant_bboxes_by_cluster
+    std::vector<std::vector<bbox_t>> full_bboxes_by_cluster(int_bvh.num_clusters);
+    std::vector<std::vector<bbox_t>> quant_bboxes_by_cluster(int_bvh.num_clusters);
+    std::queue<std::tuple<size_t, int, int>> que;
+    size_t root_left_node_idx = bvh.nodes[0].first_child_or_primitive;
+    size_t root_right_node_idx = root_left_node_idx + 1;
+    uint32_t root_left_int_node_idx = int_bvh.clusters[0].node_offset;
+    uint32_t root_right_int_node_idx = root_left_int_node_idx + 1;
+    que.emplace(root_left_node_idx, root_left_int_node_idx, 0);
+    que.emplace(root_right_node_idx, root_right_int_node_idx, 0);
+    while (!que.empty()) {
+        auto [curr_node_idx, curr_int_node_idx, curr_cluster_idx] = que.front();
+        node_t& curr_node = bvh.nodes[curr_node_idx];
+        int_node_t& curr_int_node = int_bvh.nodes[curr_int_node_idx];
+        int_cluster_t& curr_cluster = int_bvh.clusters[curr_cluster_idx];
+        que.pop();
+
+        bbox_t full_bbox = curr_node.bounding_box_proxy().to_bounding_box();
+        full_bboxes_by_cluster[curr_cluster_idx].push_back(full_bbox);
+
+        bbox_t quant_bbox;
+        for (int i = 0; i < 3; i++) {
+            float scaling_factor = int_bvh.scaling_factors[curr_cluster_idx];
+            quant_bbox.min[i] = curr_cluster.ref_bounds[i * 2] + scaling_factor * (float)curr_int_node.bounds[i * 2];
+            quant_bbox.max[i] = curr_cluster.ref_bounds[i * 2] + scaling_factor * (float)curr_int_node.bounds[i * 2 + 1];
+            assert(std::isfinite(quant_bbox.min[i]));
+            assert(std::isfinite(quant_bbox.max[i]));
+        }
+        quant_bboxes_by_cluster[curr_cluster_idx].push_back(quant_bbox);
+
+        decoded_data_t decoded_data = decode_data(curr_int_node.data);
+
+        int child_cluster_idx;
+        size_t left_node_idx = curr_node.first_child_or_primitive;
+        size_t right_node_idx = left_node_idx + 1;
+        uint32_t left_int_node_idx;
+        uint32_t right_int_node_idx;
+        switch (decoded_data.child_type) {
+            case child_type_t::INTERNAL: {
+                child_cluster_idx = curr_cluster_idx;
+                left_int_node_idx = curr_cluster.node_offset + decoded_data.idx;
+                right_int_node_idx = left_int_node_idx + 1;
+                break;
+            }
+            case child_type_t::LEAF: {
+                continue;  // this continue is related to the while loop
+            }
+            case child_type_t::SWITCH: {
+                child_cluster_idx = decoded_data.idx;
+                int_cluster_t& child_cluster = int_bvh.clusters[child_cluster_idx];
+                left_int_node_idx = child_cluster.node_offset;
+                right_int_node_idx = left_int_node_idx + 1;
+                break;
+            }
+        }
+
+        que.emplace(left_node_idx, left_int_node_idx, child_cluster_idx);
+        que.emplace(right_node_idx, right_int_node_idx, child_cluster_idx);
+    }
+
+    std::ofstream full_bboxes_fs("full_bboxes.bin", std::ios::binary);
+    std::ofstream quant_bboxes_fs("quant_bboxes.bin", std::ios::binary);
+    for (int i = 0; i < int_bvh.num_clusters; i++) {
+        for (bbox_t& full_bbox : full_bboxes_by_cluster[i]) {
+            full_bboxes_fs.write((char*)(&full_bbox.min[0]), sizeof(full_bbox.min[0]));
+            full_bboxes_fs.write((char*)(&full_bbox.max[0]), sizeof(full_bbox.max[0]));
+            full_bboxes_fs.write((char*)(&full_bbox.min[1]), sizeof(full_bbox.min[1]));
+            full_bboxes_fs.write((char*)(&full_bbox.max[1]), sizeof(full_bbox.max[1]));
+            full_bboxes_fs.write((char*)(&full_bbox.min[2]), sizeof(full_bbox.min[2]));
+            full_bboxes_fs.write((char*)(&full_bbox.max[2]), sizeof(full_bbox.max[2]));
+        }
+
+        for (bbox_t& quant_bbox : quant_bboxes_by_cluster[i]) {
+            quant_bboxes_fs.write((char*)(&quant_bbox.min[0]), sizeof(quant_bbox.min[0]));
+            quant_bboxes_fs.write((char*)(&quant_bbox.max[0]), sizeof(quant_bbox.max[0]));
+            quant_bboxes_fs.write((char*)(&quant_bbox.min[1]), sizeof(quant_bbox.min[1]));
+            quant_bboxes_fs.write((char*)(&quant_bbox.max[1]), sizeof(quant_bbox.max[1]));
+            quant_bboxes_fs.write((char*)(&quant_bbox.min[2]), sizeof(quant_bbox.min[2]));
+            quant_bboxes_fs.write((char*)(&quant_bbox.max[2]), sizeof(quant_bbox.max[2]));
+        }
+    }
 }
 
 #endif //BUILD_HPP
