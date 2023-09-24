@@ -11,4 +11,8 @@ int main(int argc, char *argv[]) {
 
     std::cout << "clustering..." << std::endl;
     int_bvh_t int_bvh = build_int_bvh(arg.t_trv_int, arg.t_switch, arg.t_ist, trigs, bvh);
+
+    std::cout << "visualizing..." << std::endl;
+    gen_tree_visualization(int_bvh);
+    gen_scene_visualization(bvh, int_bvh);
 }
