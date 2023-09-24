@@ -483,10 +483,12 @@ decoded_data_t decode_data(uint16_t data) {
     if (data & 0x8000) {
         int field_b = ((data & 0x7fff) >> field_c_bits);
         int field_c = (data & ((1 << field_c_bits) - 1));
-        if (field_b == 0)
+        if (field_b == 0) {
             decoded_data.child_type = child_type_t::INTERNAL;
-        else
+        } else {
             decoded_data.child_type = child_type_t::LEAF;
+            decoded_data.num_trigs = field_b;
+        }
         decoded_data.idx = field_c;
     } else {
         decoded_data.child_type = child_type_t::SWITCH;
@@ -567,9 +569,10 @@ void gen_scene_visualization(const bvh_t& bvh, const int_bvh_t& int_bvh) {
         node_offsets_fs.write((char*)(&offset), sizeof(offset));
     }
 
-    // fill full_bboxes_by_cluster, quant_bboxes_by_cluster
+    // fill full_bboxes_by_cluster, quant_bboxes_by_cluster, trigs_by_cluster
     std::vector<std::vector<bbox_t>> full_bboxes_by_cluster(int_bvh.num_clusters);
     std::vector<std::vector<bbox_t>> quant_bboxes_by_cluster(int_bvh.num_clusters);
+    std::vector<std::vector<trig_t>> trigs_by_cluster(int_bvh.num_clusters);
     std::queue<std::tuple<size_t, int, int>> que;
     size_t root_left_node_idx = bvh.nodes[0].first_child_or_primitive;
     size_t root_right_node_idx = root_left_node_idx + 1;
@@ -612,6 +615,10 @@ void gen_scene_visualization(const bvh_t& bvh, const int_bvh_t& int_bvh) {
                 break;
             }
             case child_type_t::LEAF: {
+                for (int i = 0; i < decoded_data.num_trigs; i++) {
+                    trig_t trig = int_bvh.trigs[curr_cluster.trig_offset + decoded_data.idx + i];
+                    trigs_by_cluster[curr_cluster_idx].push_back(trig);
+                }
                 continue;  // this continue is related to the while loop
             }
             case child_type_t::SWITCH: {
@@ -629,6 +636,8 @@ void gen_scene_visualization(const bvh_t& bvh, const int_bvh_t& int_bvh) {
 
     std::ofstream full_bboxes_fs("full_bboxes.bin", std::ios::binary);
     std::ofstream quant_bboxes_fs("quant_bboxes.bin", std::ios::binary);
+    std::ofstream trigs_size_fs("trigs_size.bin", std::ios::binary);
+    std::ofstream trigs_fs("trigs.bin", std::ios::binary);
     for (int i = 0; i < int_bvh.num_clusters; i++) {
         for (bbox_t& full_bbox : full_bboxes_by_cluster[i]) {
             full_bboxes_fs.write((char*)(&full_bbox.min[0]), sizeof(full_bbox.min[0]));
@@ -646,6 +655,23 @@ void gen_scene_visualization(const bvh_t& bvh, const int_bvh_t& int_bvh) {
             quant_bboxes_fs.write((char*)(&quant_bbox.max[1]), sizeof(quant_bbox.max[1]));
             quant_bboxes_fs.write((char*)(&quant_bbox.min[2]), sizeof(quant_bbox.min[2]));
             quant_bboxes_fs.write((char*)(&quant_bbox.max[2]), sizeof(quant_bbox.max[2]));
+        }
+
+        uint32_t size = trigs_by_cluster[i].size();
+        trigs_size_fs.write((char*)(&size), sizeof(size));
+
+        for (trig_t& trig : trigs_by_cluster[i]) {
+            vector_t p1 = trig.p1();
+            vector_t p2 = trig.p2();
+            trigs_fs.write((char*)(&trig.p0[0]), sizeof(trig.p0[0]));
+            trigs_fs.write((char*)(&trig.p0[1]), sizeof(trig.p0[1]));
+            trigs_fs.write((char*)(&trig.p0[2]), sizeof(trig.p0[2]));
+            trigs_fs.write((char*)(&p1[0]), sizeof(p1[0]));
+            trigs_fs.write((char*)(&p1[1]), sizeof(p1[1]));
+            trigs_fs.write((char*)(&p1[2]), sizeof(p1[2]));
+            trigs_fs.write((char*)(&p2[0]), sizeof(p2[0]));
+            trigs_fs.write((char*)(&p2[1]), sizeof(p2[1]));
+            trigs_fs.write((char*)(&p2[2]), sizeof(p2[2]));
         }
     }
 }
