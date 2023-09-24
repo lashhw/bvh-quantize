@@ -3,52 +3,32 @@ import numpy as np
 import sys
 
 if len(sys.argv) != 2:
-    print('usage: python vis_box.py MODEL_FILE')
+    print(f'usage: python {sys.argv[0]} MODEL_FILE')
     exit(1)
 
 ply_mesh = pv.read(sys.argv[1])
 p = pv.Plotter()
 
-cluster_size = np.fromfile('cluster_size.bin', np.uint32)
-cluster_sum = np.r_[0, np.cumsum(cluster_size)]
-bbox = np.fromfile('bbox.bin', np.float32).reshape(-1, 6)
-quant_bbox = np.fromfile('quant_bbox.bin', np.float32).reshape(-1, 6)
-full_bbox = np.fromfile('full_bbox.bin', np.float32).reshape(-1, 6)
+node_offsets = np.fromfile('node_offsets.bin', np.uint32)
+full_bboxes = np.fromfile('full_bboxes.bin', np.float32).reshape(-1, 6)
+quant_bboxes = np.fromfile('quant_bboxes.bin', np.float32).reshape(-1, 6)
 
 cluster_idx = 0
 quant_actor = None
-def draw_quant_bbox():
+def click_callback(pos):
     global cluster_idx
     global quant_actor
     p.clear()
     p.add_mesh(ply_mesh, style='wireframe')
-    box_mesh = pv.PolyData()
+    full_box_mesh = pv.PolyData()
     quant_box_mesh = pv.PolyData()
-    for i in range(cluster_sum[cluster_idx], cluster_sum[cluster_idx + 1]):
-        box_mesh += pv.Box(bbox[i])
-        quant_box_mesh += pv.Box(quant_bbox[i])
-    p.add_mesh(box_mesh, color='red', style='wireframe')
+    for i in range(node_offsets[cluster_idx], node_offsets[cluster_idx + 1]):
+        full_box_mesh += pv.Box(full_bboxes[i])
+        quant_box_mesh += pv.Box(quant_bboxes[i])
+    p.add_mesh(full_box_mesh, color='red', style='wireframe')
     quant_actor = p.add_mesh(quant_box_mesh, color='green', style='wireframe')
     cluster_idx += 1
-    p.add_text(f'{cluster_idx}/{len(cluster_size)}')
-
-def draw_full_bbox():
-    p.clear()
-    p.add_mesh(ply_mesh, style='wireframe')
-    box_mesh = pv.PolyData()
-    for i in range(full_bbox.shape[0]):
-        box_mesh += pv.Box(full_bbox[i])
-    p.add_mesh(box_mesh, color='blue', style='wireframe')
-    p.add_text(f'full_bbox: {full_bbox.shape[0]}')
-
-first = True
-def click_callback(pos):
-    global first
-    if first:
-        draw_full_bbox()
-    else:
-        draw_quant_bbox()
-    first = False
+    p.add_text(f'{cluster_idx}/{len(node_offsets)}')
 
 def keyboard_callback():
     quant_actor.visibility = not quant_actor.visibility

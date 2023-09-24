@@ -495,7 +495,7 @@ decoded_data_t decode_data(uint16_t data) {
     return decoded_data;
 }
 
-void gen_graphviz(const int_bvh_t& int_bvh) {
+void gen_tree_visualization(const int_bvh_t& int_bvh) {
     uint32_t root_left_node_idx = int_bvh.clusters[0].node_offset;
     uint32_t root_right_node_idx = root_left_node_idx + 1;
     std::array<std::string, 2> cmap = {"black", "red"};
@@ -560,7 +560,7 @@ void gen_graphviz(const int_bvh_t& int_bvh) {
     graph_fs << "}";
 }
 
-void gen_visualization(const bvh_t& bvh, const int_bvh_t& int_bvh) {
+void gen_scene_visualization(const bvh_t& bvh, const int_bvh_t& int_bvh) {
     std::ofstream node_offsets_fs("node_offsets.bin", std::ios::binary);
     for (int i = 0; i < int_bvh.num_clusters; i++) {
         uint32_t offset = int_bvh.clusters[i].node_offset;
