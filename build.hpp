@@ -79,7 +79,7 @@ struct decoded_data_t {
     uint16_t idx;
 };
 
-int floor_to_int(float x) {
+int32_t floor_to_int32(float x) {
     assert(!std::isnan(x));
     if (x < -2147483648.0f)
         return -2147483648;
@@ -89,7 +89,7 @@ int floor_to_int(float x) {
     return (int)floorf(x);
 }
 
-int ceil_to_int(float x) {
+int32_t ceil_to_int32(float x) {
     assert(!std::isnan(x));
     if (x <= -2147483649.0f)
         return -2147483648;
@@ -118,8 +118,8 @@ std::array<uint8_t, 6> get_int_bounds(const bvh_t &bvh, size_t node_idx, size_t 
 
     std::array<uint8_t, 6> ret{};
     for (int i = 0; i < 3; i++) {
-        int min = floor_to_int((node_bbox.min[i] - ref_bbox.min[i]) / scaling_factor);
-        int max = ceil_to_int((node_bbox.max[i] - ref_bbox.min[i]) / scaling_factor);
+        int min = floor_to_int32((node_bbox.min[i] - ref_bbox.min[i]) / scaling_factor);
+        int max = ceil_to_int32((node_bbox.max[i] - ref_bbox.min[i]) / scaling_factor);
         assert(0 <= min && min <= qx_max + 1);
         assert(0 <= max && max <= qx_max + 1);
         if (min == qx_max + 1)
