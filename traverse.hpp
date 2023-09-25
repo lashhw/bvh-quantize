@@ -4,8 +4,7 @@
 #include <bvh/single_ray_traverser.hpp>
 #include <bvh/primitive_intersectors.hpp>
 
-constexpr int inv_sw = 1 << 7;
-constexpr auto inv_sw_f = static_cast<float>(inv_sw);
+constexpr auto inv_sw = static_cast<float>(1 << 7);
 
 typedef bvh::Ray<float> ray_t;
 typedef bvh::SingleRayTraverser<bvh_t> traverser_t;
@@ -14,15 +13,14 @@ typedef trig_t::Intersection intersection_t;
 
 struct cluster_data_t {
     uint16_t cluster_idx;
-    float ref_bounds[6];
     int_node_t* local_nodes;
     trig_t* local_trigs;
-    float scaling_factor;
+    float inv_sx;
     float y_ref;
+    int32_t qy_max;
     float o_local[3];
     int32_t qb_l[3];
     int32_t qb_h[3];
-    int32_t qy_max;
 };
 
 std::optional<intersection_t> intersect_leaf(const int_bvh_t& int_bvh, const decoded_data_t& decoded_data,
@@ -52,7 +50,7 @@ int_w_t get_int_w(const std::array<float, 3>& w) {
     int_w_t int_w{};
 
     for (int i = 0; i < 3; i++) {
-        float qw = floorf(inv_sw_f * w[i]);
+        float qw = floorf(inv_sw * w[i]);
         auto& qwi = reinterpret_cast<uint32_t&>(qw);
 
         bool sign = qwi & 0x80000000;
@@ -112,19 +110,17 @@ std::optional<cluster_data_t> get_cluster_data(const int_bvh_t& int_bvh,
         return std::nullopt;
     cluster_data_t ret{};
     ret.cluster_idx = cluster_idx;
-    for (int i = 0; i < 6; i++)
-        ret.ref_bounds[i] = curr_cluster.ref_bounds[i];
     ret.local_nodes = &int_bvh.nodes[curr_cluster.node_offset];
     ret.local_trigs = &int_bvh.trigs[curr_cluster.trig_offset];
-    ret.scaling_factor = int_bvh.scaling_factors[cluster_idx];
+    ret.inv_sx = int_bvh.inv_sx[cluster_idx];
     ret.y_ref = y_ref.value();
+    ret.qy_max = ceil_to_int((ray.tmax - ret.y_ref) * ret.inv_sx * inv_sw);
     for (int i = 0; i < 3; i++)
         ret.o_local[i] = ray.origin[i] + y_ref.value() * ray.direction[i] - curr_cluster.ref_bounds[2 * i];
     for (int i = 0; i < 3; i++) {
-        ret.qb_l[i] = floor_to_int(-ret.o_local[i] / (ray.direction[i] * ret.scaling_factor) * inv_sw_f);
+        ret.qb_l[i] = floor_to_int(-ret.o_local[i] * w[i] * ret.inv_sx * inv_sw);
         ret.qb_h[i] = ret.qb_l[i] + 1;
     }
-    ret.qy_max = ceil_to_int((ray.tmax - ret.y_ref) / ret.scaling_factor * inv_sw_f);
     return ret;
 }
 
@@ -173,6 +169,7 @@ std::pair<uint16_t, uint16_t> get_node_cluster_pair(const decoded_data_t& decode
         case child_type_t::SWITCH:
             return {0, decoded_data.idx};
     }
+    return {};
 }
 
 std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t& ray) {
@@ -222,6 +219,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t& ray)
                     return false;
                 }
         }
+        return false;
     };
 
     while (true) {
