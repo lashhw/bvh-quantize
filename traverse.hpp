@@ -188,13 +188,17 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t& ray)
         return std::nullopt;
 
     uint16_t left_local_node_idx = 0;
+    bool cluster_will_be_reused = false;
     auto update_node_and_cluster = [&](const decoded_data_t& decoded_data) -> bool {
         switch (decoded_data.child_type) {
             case child_type_t::INTERNAL:
                 left_local_node_idx = decoded_data.idx;
                 return true;
             case child_type_t::SWITCH:
+                if (!cluster_will_be_reused)
+                    stk_1.pop();
                 left_local_node_idx = 0;
+                cluster_will_be_reused = false;
                 return push_cluster_data(decoded_data.idx);
             default:
                 assert(false);
@@ -202,7 +206,6 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t& ray)
     };
 
     while (true) {
-        uint16_t right_local_node_idx = left_local_node_idx + 1;
         int_node_t* left_node = &stk_1.top().local_nodes[left_local_node_idx];
         int_node_t* right_node = left_node + 1;
 
@@ -254,8 +257,11 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t& ray)
                 switch (right_decoded_data.child_type) {
                     case child_type_t::INTERNAL:
                         stk_2.emplace(right_decoded_data.idx, stk_1.top().cluster_idx);
+                        cluster_will_be_reused = true;
+                        break;
                     case child_type_t::SWITCH:
                         stk_2.emplace(0, right_decoded_data.idx);
+                        break;
                     default:
                         assert(false);
                 }
