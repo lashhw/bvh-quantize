@@ -1,4 +1,5 @@
 #include "build.hpp"
+#include "traverse.hpp"
 
 int main(int argc, char *argv[]) {
     arg_t arg = parse_arg(argc, argv);
