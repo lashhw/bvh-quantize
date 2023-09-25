@@ -16,6 +16,7 @@ struct cluster_data_t {
     int32_t qb_h[3];
     uint8_t tmax_version;
     int32_t qy_max;
+    bool will_be_reused;
 };
 
 struct int_w_t {
@@ -178,6 +179,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
         }
         ret.tmax_version = global_tmax_version;
         ret.qy_max = ceil_to_int32((ray.tmax - ret.y_ref) * ret.inv_sx * inv_sw);
+        ret.will_be_reused = false;
 
         stk_1.push(ret);
         return true;
@@ -188,17 +190,15 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
         return std::nullopt;
 
     uint16_t left_local_node_idx = 0;
-    bool cluster_will_be_reused = false;
     auto update_node_and_cluster = [&](const decoded_data_t& decoded_data) -> bool {
         switch (decoded_data.child_type) {
             case child_type_t::INTERNAL:
                 left_local_node_idx = decoded_data.idx;
                 return true;
             case child_type_t::SWITCH:
-                if (!cluster_will_be_reused)
+                if (!stk_1.top().will_be_reused)
                     stk_1.pop();
                 left_local_node_idx = 0;
-                cluster_will_be_reused = false;
                 return push_cluster_data(decoded_data.idx);
             default:
                 assert(false);
@@ -256,8 +256,8 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
                 // push to stk_2
                 switch (right_decoded_data.child_type) {
                     case child_type_t::INTERNAL:
+                        stk_1.top().will_be_reused = true;
                         stk_2.emplace(right_decoded_data.idx, stk_1.top().cluster_idx);
-                        cluster_will_be_reused = true;
                         break;
                     case child_type_t::SWITCH:
                         stk_2.emplace(0, right_decoded_data.idx);
@@ -283,7 +283,8 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
 
         // pop from stk_2 until we found a valid node
         while (true) {
-            if (stk_1.top().cluster_idx == stk_2.top().second || push_cluster_data(stk_2.top().second)) {
+            if ((!stk_1.empty() && stk_1.top().cluster_idx == stk_2.top().second) ||
+                push_cluster_data(stk_2.top().second)) {
                 left_local_node_idx = stk_2.top().first;
                 stk_2.pop();
                 break;
