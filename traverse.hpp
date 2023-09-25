@@ -70,7 +70,6 @@ std::optional<intersection_t> intersect_leaf(const decoded_data_t& decoded_data,
     return best_hit;
 }
 
-
 std::optional<float> intersect_full_bbox(const std::array<bool, 3>& octant,
                                          const std::array<float, 3>& w,
                                          const float* x,
