@@ -18,22 +18,17 @@ struct cluster_data_t {
     int32_t qb_h[3];
 };
 
-std::optional<intersection_t> intersect_leaf(const decoded_data_t& decoded_data, trig_t* local_trigs, ray_t& ray,
-                                             uint8_t& tmax_version) {
+std::optional<intersection_t> intersect_leaf(const decoded_data_t& decoded_data, trig_t* local_trigs, ray_t& ray) {
     assert(decoded_data.child_type == child_type_t::LEAF);
     std::optional<intersection_t> best_hit;
     trig_t* tmp_trigs = &local_trigs[decoded_data.idx];
-    bool tmax_updated = false;
     for (int i = 0; i < decoded_data.num_trigs; i++) {
         if (auto hit = tmp_trigs->intersect(ray)) {
             best_hit = hit.value();
             ray.tmax = hit->t;
-            tmax_updated = true;
         }
         tmp_trigs++;
     }
-    if (tmax_updated)
-        tmax_version++;
     return best_hit;
 }
 
@@ -49,7 +44,7 @@ int_w_t get_int_w(const std::array<float, 3>& w) {
     int_w_t int_w{};
 
     for (int i = 0; i < 3; i++) {
-        float qw = floorf(inv_sw * w[i]);
+        float qw = floorf(w[i] * inv_sw);
         auto& qwi = reinterpret_cast<uint32_t&>(qw);
 
         bool sign = qwi & 0x80000000;
@@ -84,9 +79,9 @@ std::optional<float> intersect_full_bbox(const std::array<bool, 3>& octant,
     entry[0] = w[0] * x[0 + octant[0]] + b[0];
     entry[1] = w[1] * x[2 + octant[1]] + b[1];
     entry[2] = w[2] * x[4 + octant[2]] + b[2];
-    exit [0] = w[0] * x[1 - octant[0]] + b[0];
-    exit [1] = w[1] * x[3 - octant[1]] + b[1];
-    exit [2] = w[2] * x[5 - octant[2]] + b[2];
+    exit[0] = w[0] * x[1 - octant[0]] + b[0];
+    exit[1] = w[1] * x[3 - octant[1]] + b[1];
+    exit[2] = w[2] * x[5 - octant[2]] + b[2];
 
     float entry_ = fmaxf(entry[0], fmaxf(entry[1], fmaxf(entry[2], 0.0f)));
     float exit_ = fminf(exit[0], fminf(exit[1], fminf(exit[2], tmax)));
@@ -98,11 +93,12 @@ std::optional<float> intersect_full_bbox(const std::array<bool, 3>& octant,
 }
 
 std::optional<cluster_data_t> get_cluster_data(const int_bvh_t& int_bvh,
+                                               uint16_t cluster_idx,
                                                const std::array<bool, 3>& octant,
                                                const std::array<float, 3>& w,
                                                const std::array<float, 3>& b,
-                                               const ray_t& ray,
-                                               uint16_t cluster_idx) {
+                                               uint8_t global_tmax_version,
+                                               const ray_t& ray) {
     int_cluster_t curr_cluster = int_bvh.clusters[cluster_idx];
     auto y_ref = intersect_full_bbox(octant, w, curr_cluster.ref_bounds, b, ray.tmax);
     if (!y_ref.has_value())
@@ -112,6 +108,7 @@ std::optional<cluster_data_t> get_cluster_data(const int_bvh_t& int_bvh,
     ret.local_nodes = &int_bvh.nodes[curr_cluster.node_offset];
     ret.local_trigs = &int_bvh.trigs[curr_cluster.trig_offset];
     ret.inv_sx = int_bvh.inv_sx[cluster_idx];
+    ret.tmax_version = global_tmax_version;
     ret.y_ref = y_ref.value();
     ret.qy_max = ceil_to_int((ray.tmax - ret.y_ref) * ret.inv_sx * inv_sw);
     for (int i = 0; i < 3; i++) {
@@ -122,34 +119,40 @@ std::optional<cluster_data_t> get_cluster_data(const int_bvh_t& int_bvh,
     return ret;
 }
 
-std::optional<int> intersect_bbox(int32_t qy_max,
-                                  const int_w_t& int_w,
-                                  const uint8_t* qx,
-                                  const int32_t* qb_l,
-                                  const int32_t* qb_h) {
-    const int qx_a[3] = {
+std::optional<int32_t> intersect_bbox(int32_t qy_max,
+                                      const int_w_t& int_w,
+                                      const uint8_t* qx,
+                                      const int32_t* qb_l,
+                                      const int32_t* qb_h) {
+    const int32_t qx_a[3] = {  // we use int32_t instead of uint8_t just for convenience
         int_w.iw[0] ? qx[1] : qx[0],
         int_w.iw[1] ? qx[3] : qx[2],
         int_w.iw[2] ? qx[5] : qx[4]
     };
 
-    const int qx_b[3] = {
+    const int32_t qx_b[3] = {
         int_w.iw[0] ? qx[0] : qx[1],
         int_w.iw[1] ? qx[2] : qx[3],
         int_w.iw[2] ? qx[4] : qx[5]
     };
 
-    int entry[3];
-    int exit[3];
-    entry[0] = (int_w.iw[0] ? -1 : 1) * ((int_w.qw_l[0] * qx_a[0]) << int_w.rw_l[0]) + qb_l[0];
-    entry[1] = (int_w.iw[1] ? -1 : 1) * ((int_w.qw_l[1] * qx_a[1]) << int_w.rw_l[1]) + qb_l[1];
-    entry[2] = (int_w.iw[2] ? -1 : 1) * ((int_w.qw_l[2] * qx_a[2]) << int_w.rw_l[2]) + qb_l[2];
-    exit[0] = (int_w.iw[0] ? -1 : 1) * ((int_w.qw_h[0] * qx_b[0]) << int_w.rw_h[0]) + qb_h[0];
-    exit[1] = (int_w.iw[1] ? -1 : 1) * ((int_w.qw_h[1] * qx_b[1]) << int_w.rw_h[1]) + qb_h[1];
-    exit[2] = (int_w.iw[2] ? -1 : 1) * ((int_w.qw_h[2] * qx_b[2]) << int_w.rw_h[2]) + qb_h[2];
+    int32_t entry[3];
+    int32_t exit[3];
+    entry[0] = (int_w.qw_l[0] * qx_a[0]) << int_w.rw_l[0];
+    entry[0] = (int_w.iw[0] ? -entry[0] : entry[0]) + qb_l[0];
+    entry[1] = (int_w.qw_l[1] * qx_a[1]) << int_w.rw_l[1];
+    entry[1] = (int_w.iw[1] ? -entry[1] : entry[1]) + qb_l[1];
+    entry[2] = (int_w.qw_l[2] * qx_a[2]) << int_w.rw_l[2];
+    entry[2] = (int_w.iw[2] ? -entry[2] : entry[2]) + qb_l[2];
+    exit[0] = (int_w.qw_h[0] * qx_b[0]) << int_w.rw_h[0];
+    exit[0] = (int_w.iw[0] ? -exit[0] : exit[0]) + qb_h[0];
+    exit[1] = (int_w.qw_h[1] * qx_b[1]) << int_w.rw_h[1];
+    exit[1] = (int_w.iw[1] ? -exit[1] : exit[1]) + qb_h[1];
+    exit[2] = (int_w.qw_h[2] * qx_b[2]) << int_w.rw_h[2];
+    exit[2] = (int_w.iw[2] ? -exit[2] : exit[2]) + qb_h[2];
 
-    int entry_ = std::max(entry[0], std::max(entry[1], std::max(entry[2], 0)));
-    int exit_ = std::min(exit[0], std::min(exit[1], std::min(exit[2], qy_max)));
+    int32_t entry_ = std::max(entry[0], std::max(entry[1], std::max(entry[2], 0)));
+    int32_t exit_ = std::min(exit[0], std::min(exit[1], std::min(exit[2], qy_max)));
 
     if (entry_ <= exit_)
         return entry_;
@@ -195,7 +198,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t& ray)
 
     std::stack<cluster_data_t> stk_1;
     std::stack<std::pair<uint16_t, uint16_t>> stk_2;  // [local_node_idx, cluster_idx]
-    if (auto x = get_cluster_data(int_bvh, octant, w, b, ray, 0))
+    if (auto x = get_cluster_data(int_bvh, 0, octant, w, b, global_tmax_version, ray))
         stk_1.push(x.value());
     else
         return std::nullopt;
@@ -211,7 +214,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t& ray)
                 assert(false);
             case child_type_t::SWITCH:
                 left_local_node_idx = 0;
-                if (auto x = get_cluster_data(int_bvh, octant, w, b, ray, decoded_data.idx)) {
+                if (auto x = get_cluster_data(int_bvh, decoded_data.idx, octant, w, b, global_tmax_version, ray)) {
                     stk_1.push(x.value());
                     return true;
                 } else {
@@ -244,8 +247,10 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t& ray)
 
         if (distance_left) {
             if (left_decoded_data.child_type == child_type_t::LEAF) {
-                if (auto hit = intersect_leaf(left_decoded_data, stk_1.top().local_trigs, ray, global_tmax_version))
+                if (auto hit = intersect_leaf(left_decoded_data, stk_1.top().local_trigs, ray)) {
                     best_hit = hit;
+                    global_tmax_version++;
+                }
             } else {
                 left_hit = true;
             }
@@ -253,8 +258,10 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t& ray)
 
         if (distance_right) {
             if (right_decoded_data.child_type == child_type_t::LEAF) {
-                if (auto hit = intersect_leaf(right_decoded_data, stk_1.top().local_trigs, ray, global_tmax_version))
+                if (auto hit = intersect_leaf(right_decoded_data, stk_1.top().local_trigs, ray)) {
                     best_hit = hit;
+                    global_tmax_version++;
+                }
             } else {
                 right_hit = true;
             }
@@ -284,7 +291,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t& ray)
                 left_local_node_idx = stk_2.top().first;
                 stk_2.pop();
                 break;
-            } else if (auto x = get_cluster_data(int_bvh, octant, w, b, ray, stk_2.top().second)) {
+            } else if (auto x = get_cluster_data(int_bvh, stk_2.top().second, octant, w, b, global_tmax_version, ray)) {
                 stk_1.push(x.value());
                 left_local_node_idx = stk_2.top().first;
                 stk_2.pop();
