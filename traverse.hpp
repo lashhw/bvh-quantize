@@ -18,20 +18,6 @@ struct cluster_data_t {
     int32_t qy_max;
 };
 
-std::optional<intersection_t> intersect_leaf(const decoded_data_t& decoded_data, trig_t* local_trigs, ray_t& ray) {
-    assert(decoded_data.child_type == child_type_t::LEAF);
-    std::optional<intersection_t> best_hit;
-    trig_t* tmp_trigs = &local_trigs[decoded_data.idx];
-    for (int i = 0; i < decoded_data.num_trigs; i++) {
-        if (auto hit = tmp_trigs->intersect(ray)) {
-            best_hit = hit.value();
-            ray.tmax = hit->t;
-        }
-        tmp_trigs++;
-    }
-    return best_hit;
-}
-
 struct int_w_t {
     bool iw[3];
     uint8_t rw_l[3];
@@ -69,6 +55,21 @@ int_w_t get_int_w(const std::array<float, 3>& w) {
 
     return int_w;
 }
+
+std::optional<intersection_t> intersect_leaf(const decoded_data_t& decoded_data, trig_t* local_trigs, ray_t& ray) {
+    assert(decoded_data.child_type == child_type_t::LEAF);
+    std::optional<intersection_t> best_hit;
+    trig_t* tmp_trigs = &local_trigs[decoded_data.idx];
+    for (int i = 0; i < decoded_data.num_trigs; i++) {
+        if (auto hit = tmp_trigs->intersect(ray)) {
+            best_hit = hit.value();
+            ray.tmax = hit->t;
+        }
+        tmp_trigs++;
+    }
+    return best_hit;
+}
+
 
 std::optional<float> intersect_full_bbox(const std::array<bool, 3>& octant,
                                          const std::array<float, 3>& w,
