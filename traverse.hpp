@@ -133,7 +133,7 @@ std::optional<int32_t> intersect_bbox(int32_t qy_max,
         return std::nullopt;
 }
 
-std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t& ray) {
+std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) {
     std::optional<intersection_t> best_hit;
 
     // preprocess ray
