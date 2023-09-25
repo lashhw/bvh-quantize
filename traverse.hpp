@@ -16,7 +16,6 @@ struct cluster_data_t {
     float inv_sx;
     float y_ref;
     int32_t qy_max;
-    float o_local[3];
     int32_t qb_l[3];
     int32_t qb_h[3];
 };
@@ -112,10 +111,9 @@ std::optional<cluster_data_t> get_cluster_data(const int_bvh_t& int_bvh,
     ret.inv_sx = int_bvh.inv_sx[cluster_idx];
     ret.y_ref = y_ref.value();
     ret.qy_max = ceil_to_int((ray.tmax - ret.y_ref) * ret.inv_sx * inv_sw);
-    for (int i = 0; i < 3; i++)
-        ret.o_local[i] = ray.origin[i] + y_ref.value() * ray.direction[i] - curr_cluster.ref_bounds[2 * i];
     for (int i = 0; i < 3; i++) {
-        ret.qb_l[i] = floor_to_int(-ret.o_local[i] * w[i] * ret.inv_sx * inv_sw);
+        float o_local = ray.origin[i] + y_ref.value() * ray.direction[i] - curr_cluster.ref_bounds[2 * i];
+        ret.qb_l[i] = floor_to_int(-o_local * w[i] * ret.inv_sx * inv_sw);
         ret.qb_h[i] = ret.qb_l[i] + 1;
     }
     return ret;
