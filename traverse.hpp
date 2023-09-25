@@ -7,8 +7,6 @@
 constexpr auto inv_sw = static_cast<float>(1 << 7);
 
 typedef bvh::Ray<float> ray_t;
-typedef bvh::SingleRayTraverser<bvh_t> traverser_t;
-typedef bvh::ClosestPrimitiveIntersector<bvh_t, trig_t> primitive_intersector_t;
 typedef trig_t::Intersection intersection_t;
 
 struct cluster_data_t {
@@ -23,8 +21,8 @@ struct cluster_data_t {
     int32_t qb_h[3];
 };
 
-std::optional<intersection_t> intersect_leaf(const int_bvh_t& int_bvh, const decoded_data_t& decoded_data,
-                                                    trig_t* local_trigs, ray_t& ray) {
+std::optional<intersection_t> intersect_leaf(const decoded_data_t& decoded_data,
+                                             trig_t* local_trigs, ray_t& ray) {
     assert(decoded_data.child_type == child_type_t::LEAF);
     std::optional<intersection_t> best_hit;
     trig_t* tmp_trigs = &local_trigs[decoded_data.idx];
@@ -239,7 +237,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t& ray)
 
         if (distance_left) {
             if (left_decoded_data.child_type == child_type_t::LEAF) {
-                if (auto hit = intersect_leaf(int_bvh, left_decoded_data, stk_1.top().local_trigs, ray))
+                if (auto hit = intersect_leaf(left_decoded_data, stk_1.top().local_trigs, ray))
                     best_hit = hit;
             } else {
                 left_hit = true;
@@ -248,7 +246,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t& ray)
 
         if (distance_right) {
             if (right_decoded_data.child_type == child_type_t::LEAF) {
-                if (auto hit = intersect_leaf(int_bvh, right_decoded_data, stk_1.top().local_trigs, ray))
+                if (auto hit = intersect_leaf(right_decoded_data, stk_1.top().local_trigs, ray))
                     best_hit = hit;
             } else {
                 right_hit = true;
