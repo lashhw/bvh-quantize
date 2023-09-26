@@ -1,5 +1,10 @@
 #include "build.hpp"
 #include "traverse.hpp"
+#include <bvh/single_ray_traverser.hpp>
+#include <bvh/primitive_intersectors.hpp>
+
+typedef bvh::SingleRayTraverser<bvh_t> traverser_t;
+typedef bvh::ClosestPrimitiveIntersector<bvh_t, trig_t> primitive_intersector_t;
 
 int main(int argc, char *argv[]) {
     arg_t arg = parse_arg(argc, argv);
@@ -16,4 +21,37 @@ int main(int argc, char *argv[]) {
     std::cout << "visualizing..." << std::endl;
     gen_tree_visualization(int_bvh);
     gen_scene_visualization(bvh, int_bvh);
+
+    if (arg.ray_file == nullptr)
+        return 0;
+
+    std::cout << "traversing..." << std::endl;
+    intmax_t correct_rays = 0;
+    intmax_t total_rays = 0;
+    traverser_t full_traverser(bvh);
+    primitive_intersector_t primitive_intersector(bvh, trigs.data());
+    std::ifstream ray_fs(arg.ray_file);
+    size_t tmp;
+    bvh::intersections_b = &tmp;
+    for (float r[7]; ray_fs.read((char*)r, 7 * sizeof(float)); total_rays++) {
+        ray_t ray(
+            vector_t(r[0], r[1], r[2]),
+            vector_t(r[3], r[4], r[5]),
+            0.f,
+            r[6]
+        );
+        auto full_result = full_traverser.traverse(ray, primitive_intersector);
+        auto int_result = int_traverse(int_bvh, ray);
+
+        if (full_result.has_value()) {
+            if (int_result.has_value() &&
+                int_result->t == full_result->intersection.t &&
+                int_result->u == full_result->intersection.u &&
+                int_result->v == full_result->intersection.v)
+                correct_rays++;
+        } else if (!int_result.has_value()) {
+                correct_rays++;
+        }
+    }
+    std::cout << correct_rays << "/" << total_rays << std::endl;
 }
