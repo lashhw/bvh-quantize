@@ -31,27 +31,36 @@ int_w_t get_int_w(const std::array<float, 3>& w) {
     int_w_t int_w{};
 
     for (int i = 0; i < 3; i++) {
-        float qw = floorf(w[i] * inv_sw);
-        auto& qwi = reinterpret_cast<uint32_t&>(qw);
+        auto& wi = reinterpret_cast<const uint32_t&>(w[i]);
 
-        bool sign = qwi & 0x80000000;
-        uint32_t exponent = (qwi >> 23) & 0xff;
-        uint32_t mantissa = qwi & 0x7fffff;
+        bool sign = wi & 0x80000000;
+        uint32_t exponent = (wi >> 23) & 0xff;
+        uint32_t mantissa = wi & 0x7fffff;
 
         // 127 + 7 = 134
-        uint32_t low_exponent = (exponent - 134) & 0b11111;
-        uint32_t low_mantissa = mantissa >> 16;
-        uint32_t low = (low_exponent << 7) | low_mantissa;
+        uint32_t near_exponent = (exponent - 127) & 0b11111;
+        uint32_t near_mantissa = mantissa >> 16;
+        uint32_t near = (near_exponent << 7) | near_mantissa;
 
-        uint32_t high = sign ? (low - 1) : (low + 1);
-        uint32_t high_exponent = high >> 7;
-        uint32_t high_mantissa = high & 0b1111111;
+        uint32_t far = near + 1;
+        uint32_t far_exponent = far >> 7;
+        uint32_t far_mantissa = far & 0b1111111;
 
         int_w.iw[i] = sign;
-        int_w.rw_l[i] = low_exponent;
-        int_w.qw_l[i] = 0b10000000 | low_mantissa;
-        int_w.rw_h[i] = high_exponent;
-        int_w.qw_h[i] = 0b10000000 | high_mantissa;
+        near_mantissa |= 0b10000000;
+        far_mantissa |= 0b10000000;
+
+        if (sign) {
+            int_w.rw_l[i] = far_exponent;
+            int_w.qw_l[i] = far_mantissa;
+            int_w.rw_h[i] = near_exponent;
+            int_w.qw_h[i] = near_mantissa;
+        } else {
+            int_w.rw_l[i] = near_exponent;
+            int_w.qw_l[i] = near_mantissa;
+            int_w.rw_h[i] = far_exponent;
+            int_w.qw_h[i] = far_mantissa;
+        }
     }
 
     return int_w;
