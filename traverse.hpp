@@ -80,11 +80,11 @@ std::optional<intersection_t> intersect_leaf(const decoded_data_t& decoded_data,
     return best_hit;
 }
 
-std::optional<float> intersect_full_bbox(const std::array<bool, 3>& octant,
-                                         const std::array<float, 3>& w,
-                                         const float* x,
-                                         const std::array<float, 3>& b,
-                                         float tmax) {
+std::optional<float> intersect_bbox(const std::array<bool, 3>& octant,
+                                    const std::array<float, 3>& w,
+                                    const float* x,
+                                    const std::array<float, 3>& b,
+                                    float tmax) {
     float entry[3], exit[3];
     entry[0] = w[0] * x[0 + octant[0]] + b[0];
     entry[1] = w[1] * x[2 + octant[1]] + b[1];
@@ -102,11 +102,11 @@ std::optional<float> intersect_full_bbox(const std::array<bool, 3>& octant,
         return std::nullopt;
 }
 
-std::optional<int32_t> intersect_bbox(int32_t qy_max,
-                                      const int_w_t& int_w,
-                                      const uint8_t* qx,
-                                      const int32_t* qb_l,
-                                      const int32_t* qb_h) {
+std::optional<int32_t> intersect_int_bbox(int32_t qy_max,
+                                          const int_w_t& int_w,
+                                          const uint8_t* qx,
+                                          const int32_t* qb_l,
+                                          const int32_t* qb_h) {
     const int32_t qx_a[3] = {  // we use int32_t instead of uint8_t just for convenience
         int_w.iw[0] ? qx[1] : qx[0],
         int_w.iw[1] ? qx[3] : qx[2],
@@ -169,9 +169,9 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
     std::stack<cluster_data_t> stk_1;
     std::stack<std::pair<uint16_t, uint16_t>> stk_2;  // [local_node_idx, cluster_idx]
 
-    auto push_cluster_data = [&](uint16_t cluster_idx) -> bool {
+    auto push_cluster = [&](uint16_t cluster_idx) -> bool {
         int_cluster_t curr_cluster = int_bvh.clusters[cluster_idx];
-        auto y_ref = intersect_full_bbox(octant, w, curr_cluster.ref_bounds, b, ray.tmax);
+        auto y_ref = intersect_bbox(octant, w, curr_cluster.ref_bounds, b, ray.tmax);
         if (!y_ref.has_value())
             return false;
 
@@ -195,7 +195,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
     };
 
     // intersect top cluster
-    if (!push_cluster_data(0))
+    if (!push_cluster(0))
         return std::nullopt;
 
     uint16_t left_local_node_idx = 0;
@@ -208,7 +208,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
                 if (stk_1.top().num_nodes_in_stk_2 == 0)
                     stk_1.pop();
                 left_local_node_idx = 0;
-                return push_cluster_data(decoded_data.idx);
+                return push_cluster(decoded_data.idx);
             default:
                 assert(false);
         }
@@ -223,10 +223,10 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
             stk_1.top().qy_max = ceil_to_int32((ray.tmax - stk_1.top().y_ref) * stk_1.top().inv_sx * inv_sw);
         }
 
-        auto distance_left = intersect_bbox(stk_1.top().qy_max, int_w, left_node->bounds,
-                                            stk_1.top().qb_l, stk_1.top().qb_h);
-        auto distance_right = intersect_bbox(stk_1.top().qy_max, int_w, right_node->bounds,
-                                             stk_1.top().qb_l, stk_1.top().qb_h);
+        auto distance_left = intersect_int_bbox(stk_1.top().qy_max, int_w, left_node->bounds,
+                                                stk_1.top().qb_l, stk_1.top().qb_h);
+        auto distance_right = intersect_int_bbox(stk_1.top().qy_max, int_w, right_node->bounds,
+                                                 stk_1.top().qb_l, stk_1.top().qb_h);
 
         decoded_data_t left_decoded_data = decode_data(left_node->data);
         decoded_data_t right_decoded_data = decode_data(right_node->data);
@@ -258,7 +258,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
 
         if (left_hit) {
             if (right_hit) {
-                // ensure left_decoded_data if closer
+                // ensure left_decoded_data is closer
                 if (distance_left.value() > distance_right.value())
                     std::swap(left_decoded_data, right_decoded_data);
 
@@ -286,7 +286,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
         if (stk_2.empty())
             break;
 
-        // if no node in stack is associated with this cluster, this cluster must not be used anymore
+        // if no node in stack is associated with this cluster, this cluster will not be used anymore
         if (!stk_1.empty() && stk_1.top().num_nodes_in_stk_2 == 0)
             stk_1.pop();
 
@@ -297,7 +297,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
                 stk_1.top().num_nodes_in_stk_2--;
                 stk_2.pop();
                 break;
-            } else if (push_cluster_data(stk_2.top().second)) {
+            } else if (push_cluster(stk_2.top().second)) {
                 left_local_node_idx = stk_2.top().first;
                 stk_2.pop();
                 break;
