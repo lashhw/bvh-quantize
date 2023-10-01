@@ -18,7 +18,7 @@ int main() {
     arg_t arg = {
         .model_file = strdup("../data/scene/classroom.ply"),
         .t_trv_int = 0.5,
-        .t_switch = 0.5,
+        .t_switch = 1,
         .t_ist = 1,
         .ray_file = strdup("../data/scene/classroom.ray")
     };
