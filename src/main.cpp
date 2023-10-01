@@ -31,8 +31,6 @@ int main(int argc, char *argv[]) {
     traverser_t full_traverser(bvh);
     primitive_intersector_t primitive_intersector(bvh, trigs.data());
     std::ifstream ray_fs(arg.ray_file);
-    size_t tmp;
-    bvh::intersections_b = &tmp;
     for (float r[7]; ray_fs.read((char*)r, 7 * sizeof(float)); total_rays++) {
         ray_t ray(
             vector_t(r[0], r[1], r[2]),
