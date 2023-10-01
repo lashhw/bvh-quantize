@@ -1,0 +1,62 @@
+#include "build.hpp"
+#include "traverse.hpp"
+#include "unistd.h"
+
+// prevent gcc from optimizing out result
+__attribute__((__used__)) std::optional<intersection_t> int_result;
+
+int main() {
+    // perf control fifo
+    char* ctl_fd_str = getenv("CTL_FD");
+    assert(ctl_fd_str != nullptr);
+    char* ack_fd_str = getenv("ACK_FD");
+    assert(ack_fd_str != nullptr);
+    int ctl_fd = std::stoi(ctl_fd_str);
+    int ack_fd = std::stoi(ack_fd_str);
+    char ack[5];
+
+    arg_t arg = {
+        .model_file = strdup("../data/scene/classroom.ply"),
+        .t_trv_int = 0.5,
+        .t_switch = 0.5,
+        .t_ist = 1,
+        .ray_file = strdup("../data/scene/classroom.ray")
+    };
+
+    std::cout << "loading scene..." << std::endl;
+    std::vector<trig_t> trigs = load_trigs(arg.model_file);
+
+    std::cout << "building..." << std::endl;
+    bvh_t bvh = build_bvh(trigs);
+
+    std::cout << "clustering..." << std::endl;
+    int_bvh_t int_bvh = build_int_bvh(arg.t_trv_int, arg.t_switch, arg.t_ist, trigs, bvh);
+
+    std::cout << "loading rays..." << std::endl;
+    std::vector<ray_t> rays;
+    std::ifstream ray_fs(arg.ray_file);
+    for (float r[7]; ray_fs.read((char*)r, 7 * sizeof(float)); ) {
+        rays.emplace_back(
+            vector_t(r[0], r[1], r[2]),
+            vector_t(r[3], r[4], r[5]),
+            0.f,
+            r[6]
+        );
+    }
+
+    // start profiling
+    std::cout << "traversing..." << std::endl;
+    write(ctl_fd, "enable\n", 8);
+    read(ack_fd, ack, 5);
+    assert(strncmp(ack, "ack\n", 5) == 0);
+
+    for (ray_t &ray : rays)
+        int_result = int_traverse(int_bvh, ray);
+
+    // finish profiling
+    write(ctl_fd, "disable\n", 9);
+    read(ack_fd, ack, 5);
+    assert(strncmp(ack, "ack\n", 5) == 0);
+
+    std::cout << rays.size() << " rays traversed." << std::endl;
+}

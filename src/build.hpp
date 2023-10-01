@@ -350,7 +350,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
         if (curr_node.is_leaf())
             continue;
 
-        int child_cluster_idx;
+        int child_cluster_idx = -1;
         switch (policy[curr_node_idx]) {
             case policy_t::STAY:
                 child_cluster_idx = curr_cluster_idx;
@@ -378,7 +378,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
     std::vector<int> cluster_idx_map(bvh.node_count);
     std::vector<float> scaling_factors(num_clusters);
     for (int i = 0; i < num_clusters; i++) {
-        for (int j = 0; j < cluster_node_indices[i].size(); j++)
+        for (unsigned int j = 0; j < cluster_node_indices[i].size(); j++)
             cluster_idx_map[cluster_node_indices[i][j]] = i;
         scaling_factors[i] = get_scaling_factor(bvh, ref_indices[i]);
     }
@@ -409,7 +409,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
             node_t& curr_node = bvh.nodes[curr_node_idx];
             if (curr_node.is_leaf()) {
                 local_trig_idx_map[curr_node_idx] = tmp_local_trig_offset;
-                for (int j = 0; j < curr_node.primitive_count; j++) {
+                for (unsigned int j = 0; j < curr_node.primitive_count; j++) {
                     size_t trig_idx = bvh.primitive_indices[curr_node.first_child_or_primitive + j];
                     int_bvh.trigs[tmp_trig_offset] = trigs[trig_idx];
                     tmp_trig_offset++;
