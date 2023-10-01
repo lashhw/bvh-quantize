@@ -16,11 +16,11 @@ int main() {
     char ack[5];
 
     arg_t arg = {
-        .model_file = strdup("../data/scene/classroom.ply"),
+        .model_file = strdup("../data/scene/kitchen.ply"),
         .t_trv_int = 0.5,
         .t_switch = 1,
         .t_ist = 1,
-        .ray_file = strdup("../data/scene/classroom.ray")
+        .ray_file = strdup("../data/scene/kitchen.ray")
     };
 
     std::cout << "loading scene..." << std::endl;
