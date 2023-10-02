@@ -1,6 +1,6 @@
-#include "build.hpp"
-#include "traverse.hpp"
-#include "unistd.h"
+#include "../src/build.hpp"
+#include "../src/traverse.hpp"
+#include <unistd.h>
 
 // prevent gcc from optimizing out result
 __attribute__((__used__)) std::optional<intersection_t> int_result;
