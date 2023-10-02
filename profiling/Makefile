@@ -5,7 +5,7 @@ all:
 %.target: %.out
 	bash setup_and_perf.sh $<
 
-%.out: ../src/%.cpp
+%.out: %.cpp
 	g++ -Wall -Wno-unknown-pragmas --std=c++17 -O3 -I../src/bvh/include $< -o $@
 
 clean:

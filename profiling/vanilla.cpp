@@ -1,8 +1,8 @@
-#include "build.hpp"
-#include "traverse.hpp"
+#include "../src/build.hpp"
+#include "../src/traverse.hpp"
 #include <bvh/single_ray_traverser.hpp>
 #include <bvh/primitive_intersectors.hpp>
-#include "unistd.h"
+#include <unistd.h>
 
 typedef bvh::SingleRayTraverser<bvh_t> traverser_t;
 typedef bvh::ClosestPrimitiveIntersector<bvh_t, trig_t> primitive_intersector_t;
