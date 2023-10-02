@@ -22,9 +22,9 @@ int main() {
 
     arg_t arg = {
         .model_file = strdup("../data/scene/kitchen.ply"),
-        .t_trv_int = -1,
-        .t_switch = -1,
-        .t_ist = -1,
+        .t_trv_int = 0.5,
+        .t_switch = 1,
+        .t_ist = 1,
         .ray_file = strdup("../data/scene/kitchen.ray")
     };
 
@@ -33,6 +33,9 @@ int main() {
 
     std::cout << "building..." << std::endl;
     bvh_t bvh = build_bvh(trigs);
+
+    std::cout << "clustering..." << std::endl;
+    int_bvh_t int_bvh = build_int_bvh(arg.t_trv_int, arg.t_switch, arg.t_ist, trigs, bvh);
 
     std::cout << "loading rays..." << std::endl;
     std::vector<ray_t> rays;
