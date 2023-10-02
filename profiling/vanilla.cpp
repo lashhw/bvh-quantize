@@ -8,7 +8,7 @@ typedef bvh::SingleRayTraverser<bvh_t> traverser_t;
 typedef bvh::ClosestPrimitiveIntersector<bvh_t, trig_t> primitive_intersector_t;
 
 // prevent gcc from optimizing out result
-std::optional<primitive_intersector_t::Result> full_result __attribute__((__used__));
+volatile intersection_t full_result;
 
 int main() {
     // perf control fifo
@@ -54,8 +54,14 @@ int main() {
 
     traverser_t full_traverser(bvh);
     primitive_intersector_t primitive_intersector(bvh, trigs.data());
-    for (ray_t &ray : rays)
-        full_result = full_traverser.traverse(ray, primitive_intersector);
+    for (ray_t &ray : rays) {
+        auto tmp = full_traverser.traverse(ray, primitive_intersector);
+        if (tmp) {
+            full_result.t = tmp->intersection.t;
+            full_result.u = tmp->intersection.u;
+            full_result.v = tmp->intersection.v;
+        }
+    }
 
     // finish profiling
     write(ctl_fd, "disable\n", 9);
