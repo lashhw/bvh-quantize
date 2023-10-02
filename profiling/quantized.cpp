@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 // prevent gcc from optimizing out result
-std::optional<intersection_t> int_result __attribute__((__used__));
+volatile intersection_t int_result;
 
 int main() {
     // perf control fifo
@@ -50,8 +50,14 @@ int main() {
     read(ack_fd, ack, 5);
     assert(strncmp(ack, "ack\n", 5) == 0);
 
-    for (ray_t &ray : rays)
-        int_result = int_traverse(int_bvh, ray);
+    for (ray_t &ray : rays) {
+        auto tmp = int_traverse(int_bvh, ray);
+        if (tmp) {
+            int_result.t = tmp->t;
+            int_result.u = tmp->u;
+            int_result.v = tmp->v;
+        }
+    }
 
     // finish profiling
     write(ctl_fd, "disable\n", 9);
