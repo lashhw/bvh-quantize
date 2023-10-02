@@ -6,7 +6,7 @@ all:
 	bash setup_and_perf.sh $<
 
 %.out: %.cpp
-	g++ -Wall -Wno-unknown-pragmas --std=c++17 -O3 -I../src/bvh/include $< -o $@
+	g++ -Wall -Wno-unknown-pragmas --std=c++17 -O3 -I../src/bvh/include -DNDEBUG $< -o $@
 
 clean:
 	rm -rf vanilla.out quantized.out perf.data perf.data.old
