@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 // prevent gcc from optimizing out result
-__attribute__((__used__)) std::optional<intersection_t> int_result;
+std::optional<intersection_t> int_result __attribute__((__used__));
 
 int main() {
     // perf control fifo
