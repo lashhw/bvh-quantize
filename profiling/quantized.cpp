@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 // prevent gcc from optimizing out result
-volatile intersection_t int_result;
+intersection_t int_result __attribute__ ((used));
 
 int main() {
     // perf control fifo
