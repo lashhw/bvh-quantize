@@ -8,7 +8,7 @@ typedef bvh::SingleRayTraverser<bvh_t> traverser_t;
 typedef bvh::ClosestPrimitiveIntersector<bvh_t, trig_t> primitive_intersector_t;
 
 // prevent gcc from optimizing out result
-volatile intersection_t full_result;
+intersection_t full_result __attribute__ ((used));
 
 int main() {
     // perf control fifo
