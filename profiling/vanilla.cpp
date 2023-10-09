@@ -10,7 +10,12 @@ typedef bvh::ClosestPrimitiveIntersector<bvh_t, trig_t> primitive_intersector_t;
 // prevent gcc from optimizing out result
 intersection_t full_result __attribute__ ((used));
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        std::cerr << "usage: " << argv[0] << " SCENE_NAME" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
     // perf control fifo
     char* ctl_fd_str = getenv("CTL_FD");
     assert(ctl_fd_str != nullptr);
@@ -20,12 +25,15 @@ int main() {
     int ack_fd = std::stoi(ack_fd_str);
     char ack[5];
 
+    std::string model_file = std::string("../data/scene/") + std::string(argv[1]) + ".ply";
+    std::string ray_file = std::string("../data/scene/") + std::string(argv[1]) + ".ray";
+
     arg_t arg = {
-        .model_file = strdup("../data/scene/kitchen.ply"),
+        .model_file = (char*)model_file.c_str(),
         .t_trv_int = 0.5,
         .t_switch = 1,
         .t_ist = 1,
-        .ray_file = strdup("../data/scene/kitchen.ray")
+        .ray_file = (char*)ray_file.c_str()
     };
 
     std::cout << "loading scene..." << std::endl;

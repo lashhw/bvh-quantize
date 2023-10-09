@@ -13,4 +13,4 @@ exec {ACK_FD}<>ack.fifo
 export ACK_FD=${ACK_FD}
 
 # start profiling
-perf stat --delay=-1 -d --control=fd:${CTL_FD},${ACK_FD} -- "./$1"
+perf stat --delay=-1 -d --control=fd:${CTL_FD},${ACK_FD} -- "./$1" "$2"
