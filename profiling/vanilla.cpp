@@ -11,8 +11,8 @@ typedef bvh::ClosestPrimitiveIntersector<bvh_t, trig_t> primitive_intersector_t;
 intersection_t full_result __attribute__ ((used));
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        std::cerr << "usage: " << argv[0] << " SCENE_NAME" << std::endl;
+    if (argc != 4) {
+        std::cerr << "usage: " << argv[0] << " SCENE_NAME T_TRV_INT T_SWITCH" << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -30,11 +30,17 @@ int main(int argc, char* argv[]) {
 
     arg_t arg = {
         .model_file = (char*)model_file.c_str(),
-        .t_trv_int = 0.5,
-        .t_switch = 1,
+        .t_trv_int = std::stof(argv[2]),
+        .t_switch = std::stof(argv[3]),
         .t_ist = 1,
         .ray_file = (char*)ray_file.c_str()
     };
+
+    std::cout << "model_file = " << arg.model_file << std::endl;
+    std::cout << "t_trv_int = " << arg.t_trv_int << std::endl;
+    std::cout << "t_switch = " << arg.t_switch << std::endl;
+    std::cout << "t_ist = " << arg.t_ist << std::endl;
+    std::cout << "ray_file = " << arg.ray_file << std::endl;
 
     std::cout << "loading scene..." << std::endl;
     std::vector<trig_t> trigs = load_trigs(arg.model_file);
