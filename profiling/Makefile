@@ -3,7 +3,8 @@ all:
 	make quantized.target
 
 %.target: %.out
-	bash setup_and_perf.sh $<
+	if [ -z ${SCENE} ]; then false; fi
+	bash setup_and_perf.sh $< ${SCENE}
 
 %.out: %.cpp
 	g++ -Wall -Wno-unknown-pragmas --std=c++17 -O3 -I../src/bvh/include -DNDEBUG $< -o $@
