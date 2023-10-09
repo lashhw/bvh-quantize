@@ -85,7 +85,6 @@ int32_t floor_to_int32(float x) {
         return -2147483648;
     if (x >= 2147483648.0f)
         return 2147483647;
-    assert(x >= -2147483648.0f && x < 2147483648.0f);
     return (int)floorf(x);
 }
 
@@ -95,7 +94,6 @@ int32_t ceil_to_int32(float x) {
         return -2147483648;
     if (x > 2147483647.0f)
         return 2147483647;
-    assert(x > -2147483649.0f && x <= 2147483647.0f);
     return (int)ceilf(x);
 }
 
