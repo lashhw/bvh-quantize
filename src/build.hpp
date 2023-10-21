@@ -451,21 +451,29 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
             switch (child_type) {
                 case child_type_t::INTERNAL: {
                     size_t field_c = local_node_idx_map[left_node_idx];
-                    assert(field_c < max_node_in_cluster_size);
+                    if (field_c >= max_node_in_cluster_size) {
+                        std::cerr << "internal node cannot fit!" << std::endl;
+                        exit(EXIT_FAILURE);
+                    }
                     curr_int_node.data = 0x8000 | field_c;
                     break;
                 }
                 case child_type_t::LEAF: {
                     size_t field_b = bvh.nodes[curr_node_idx].primitive_count;
                     size_t field_c = local_trig_idx_map[curr_node_idx];
-                    assert(field_b <= max_trig_in_leaf_size);
-                    assert(field_c < max_trig_in_cluster_size);
+                    if (field_b > max_trig_in_leaf_size || field_c >= max_trig_in_cluster_size) {
+                        std::cerr << "leaf node cannot fit!" << std::endl;
+                        exit(EXIT_FAILURE);
+                    }
                     curr_int_node.data = 0x8000 | (field_b << field_c_bits) | field_c;
                     break;
                 }
                 case child_type_t::SWITCH: {
                     size_t field_bc = cluster_idx_map[left_node_idx];
-                    assert(field_bc < max_cluster_size);
+                    if (field_bc >= max_cluster_size) {
+                        std::cerr << "switch node cannot fit!" << std::endl;
+                        exit(EXIT_FAILURE);
+                    }
                     curr_int_node.data = field_bc;
                     break;
                 }
