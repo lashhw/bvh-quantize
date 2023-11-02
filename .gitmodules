@@ -1,7 +1,3 @@
 [submodule "src/happly"]
 	path = src/happly
 	url = https://github.com/nmwsharp/happly.git
-[submodule "src/bvh"]
-	path = src/bvh
-	url = https://github.com/madmann91/bvh.git
-	branch = v1
