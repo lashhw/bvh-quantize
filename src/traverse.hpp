@@ -333,6 +333,8 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
     }
 
     end:
+    if (best_hit.has_value())
+        statistics.finalize++;
     return best_hit;
 }
 
