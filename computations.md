@@ -29,7 +29,7 @@
 * 1 FP32_CEILTO_INT32
 * 3 INT32_INCR
 
-### per recompute_ymax
+### per recompute_qymax
 * 1 FP32_MUL
 * 1 FP32_ADDSUB
 * 1 FP32_CEILTO_INT32
