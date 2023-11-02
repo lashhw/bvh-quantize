@@ -68,6 +68,7 @@ struct int_bvh_t {
     // clusters[0] is the top cluster
     int num_clusters = 0;
     std::unique_ptr<int_cluster_t[]> clusters;
+    // TODO: inv_sx can be substituted with inv_sx * inv_sw
     std::unique_ptr<float[]> inv_sx;
     std::unique_ptr<trig_t[]> trigs;
     std::unique_ptr<int_node_t[]> nodes;

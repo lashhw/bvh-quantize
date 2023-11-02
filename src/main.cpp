@@ -30,6 +30,8 @@ int main(int argc, char *argv[]) {
     intmax_t total_rays = 0;
     traverser_t full_traverser(bvh);
     primitive_intersector_t primitive_intersector(bvh, trigs.data());
+    traverser_t::Statistics full_statistics;
+    statistics_t int_statistics;
     std::ifstream ray_fs(arg.ray_file);
     for (float r[7]; ray_fs.read((char*)r, 7 * sizeof(float)); total_rays++) {
         ray_t ray(
@@ -38,8 +40,8 @@ int main(int argc, char *argv[]) {
             0.f,
             r[6]
         );
-        auto full_result = full_traverser.traverse(ray, primitive_intersector);
-        auto int_result = int_traverse(int_bvh, ray);
+        auto full_result = full_traverser.traverse(ray, primitive_intersector, full_statistics);
+        auto int_result = int_traverse(int_bvh, ray, int_statistics);
 
         if (full_result.has_value()) {
             if (int_result.has_value() &&
