@@ -83,7 +83,7 @@ int_w_t get_int_w(const std::array<float, 3>& w) {
 }
 
 std::optional<intersection_t> intersect_leaf(const decoded_data_t& decoded_data, trig_t* local_trigs, ray_t& ray,
-                                             statistics_t statistics) {
+                                             statistics_t& statistics) {
     assert(decoded_data.child_type == child_type_t::LEAF);
     std::optional<intersection_t> best_hit;
     trig_t* tmp_trigs = &local_trigs[decoded_data.idx];
