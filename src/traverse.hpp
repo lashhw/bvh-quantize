@@ -27,6 +27,22 @@ struct int_w_t {
     uint8_t qw_h[3];
 };
 
+struct statistics_t {
+    struct {
+        size_t intersections_a = 0;
+        size_t intersections_b = 0;
+        struct Empty {
+            Empty& operator++() { return *this; }
+        } traversal_steps, both_intersected, finalize;
+    } bvh_statistics;
+    uintmax_t intersect_bbox = 0;
+    uintmax_t push_cluster = 0;
+    uintmax_t recompute_qymax = 0;
+    uintmax_t traversal_steps = 0;
+    uintmax_t both_intersected = 0;
+    uintmax_t finalize = 0;
+};
+
 int_w_t get_int_w(const std::array<float, 3>& w) {
     int_w_t int_w{};
 
@@ -66,12 +82,13 @@ int_w_t get_int_w(const std::array<float, 3>& w) {
     return int_w;
 }
 
-std::optional<intersection_t> intersect_leaf(const decoded_data_t& decoded_data, trig_t* local_trigs, ray_t& ray) {
+std::optional<intersection_t> intersect_leaf(const decoded_data_t& decoded_data, trig_t* local_trigs, ray_t& ray,
+                                             statistics_t statistics) {
     assert(decoded_data.child_type == child_type_t::LEAF);
     std::optional<intersection_t> best_hit;
     trig_t* tmp_trigs = &local_trigs[decoded_data.idx];
     for (int i = 0; i < decoded_data.num_trigs; i++) {
-        if (auto hit = tmp_trigs->intersect(ray)) {
+        if (auto hit = tmp_trigs->intersect(ray, statistics.bvh_statistics)) {
             best_hit = hit.value();
             ray.tmax = hit->t;
         }
@@ -143,7 +160,7 @@ std::optional<int32_t> intersect_int_bbox(int32_t qy_max,
         return std::nullopt;
 }
 
-std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) {
+std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, statistics_t& statistics) {
     std::optional<intersection_t> best_hit;
 
     // preprocess ray
@@ -170,11 +187,13 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
     std::stack<std::pair<uint16_t, uint16_t>> stk_2;  // [local_node_idx, cluster_idx]
 
     auto push_cluster = [&](uint16_t cluster_idx) -> bool {
+        statistics.intersect_bbox++;
         int_cluster_t curr_cluster = int_bvh.clusters[cluster_idx];
         auto y_ref = intersect_bbox(octant, w, curr_cluster.ref_bounds, b, ray.tmax);
         if (!y_ref.has_value())
             return false;
 
+        statistics.push_cluster++;
         cluster_data_t ret{};
         ret.cluster_idx = cluster_idx;
         ret.local_nodes = &int_bvh.nodes[curr_cluster.node_offset];
@@ -219,10 +238,12 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
         int_node_t* right_node = left_node + 1;
 
         if (stk_1.top().tmax_version != global_tmax_version) {
+            statistics.recompute_qymax++;
             stk_1.top().tmax_version = global_tmax_version;
             stk_1.top().qy_max = ceil_to_int32((ray.tmax - stk_1.top().y_ref) * stk_1.top().inv_sx * inv_sw);
         }
 
+        statistics.traversal_steps++;
         auto distance_left = intersect_int_bbox(stk_1.top().qy_max, int_w, left_node->bounds,
                                                 stk_1.top().qb_l, stk_1.top().qb_h);
         auto distance_right = intersect_int_bbox(stk_1.top().qy_max, int_w, right_node->bounds,
@@ -236,7 +257,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
 
         if (distance_left.has_value()) {
             if (left_decoded_data.child_type == child_type_t::LEAF) {
-                if (auto hit = intersect_leaf(left_decoded_data, stk_1.top().local_trigs, ray)) {
+                if (auto hit = intersect_leaf(left_decoded_data, stk_1.top().local_trigs, ray, statistics)) {
                     best_hit = hit;
                     global_tmax_version++;
                 }
@@ -247,7 +268,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
 
         if (distance_right.has_value()) {
             if (right_decoded_data.child_type == child_type_t::LEAF) {
-                if (auto hit = intersect_leaf(right_decoded_data, stk_1.top().local_trigs, ray)) {
+                if (auto hit = intersect_leaf(right_decoded_data, stk_1.top().local_trigs, ray, statistics)) {
                     best_hit = hit;
                     global_tmax_version++;
                 }
@@ -258,6 +279,8 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray) 
 
         if (left_hit) {
             if (right_hit) {
+                statistics.both_intersected++;
+
                 // ensure left_decoded_data is closer
                 if (distance_left.value() > distance_right.value())
                     std::swap(left_decoded_data, right_decoded_data);

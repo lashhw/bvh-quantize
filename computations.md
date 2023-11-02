@@ -1,4 +1,8 @@
 ## Vanilla
+### per ray
+* 3 FP32_RCP
+* 3 FP32_MUL
+
 ### per traversal_steps
 * 12 FP32_MUL
 * 12 FP32_ADDSUB
@@ -8,35 +12,45 @@
 * 1 FP32_CMP
 
 ## Quantized
-### per clusters
-* 12 FP32_MUL
-* 13 FP32_ADDSUB
+### per ray
+* 3 FP32_RCP
+* 3 FP32_MUL
+* 3 INT8_SUB_127
+
+### per intersect_bbox
+* 6 FP32_MUL
+* 6 FP32_ADDSUB
 * 7 FP32_CMP
+
+### per push_cluster
+* 10 FP32_MUL
+* 7 FP32_ADDSUB
+* 3 FP32_FLOORTO_INT32
+* 1 FP32_CEILTO_INT32
+* 3 INT32_INCR
 
 ### per recompute_ymax
 * 1 FP32_MUL
 * 1 FP32_ADDSUB
+* 1 FP32_CEILTO_INT32
 
 ### per traversal_steps
 * 12 INT8_MUL
-* 12 INT32_ADDSUB
+* 12 INT32_ADD
 * 14 INT32_CMP
 
 ### per both_intersected
 * 1 INT32_CMP
 
 ## Common
-### per ray
-* 3 FP32_RCP
-* 3 FP32_MUL
 
 ### per intersections_a
-* 15(+6) FP32_MUL 
+* 15(+6) FP32_MUL
 * 13(+3) FP32_ADDSUB
 * 1 FP32_CMP
 
 ### per intersections_b
-* 5 FP32_MUL 
+* 5 FP32_MUL
 * 2 FP32_ADDSUB
 * 2 FP32_CMP
 
