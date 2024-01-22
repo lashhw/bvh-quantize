@@ -6,9 +6,3 @@ add_subdirectory(src/bvh)
 
 add_executable(bvh_quantize src/main.cpp)
 target_link_libraries(bvh_quantize PUBLIC bvh)
-
-add_executable(vanilla profiling/vanilla.cpp)
-target_link_libraries(vanilla PUBLIC bvh)
-
-add_executable(quantized profiling/quantized.cpp)
-target_link_libraries(quantized PUBLIC bvh)
