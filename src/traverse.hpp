@@ -186,20 +186,20 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
 
     auto push_cluster = [&](uint16_t cluster_idx) -> bool {
         statistics.intersect_bbox++;
-        int_cluster_t curr_cluster = int_bvh.clusters[cluster_idx];
-        auto y_ref = intersect_bbox(octant, w, curr_cluster.ref_bounds, b, ray.tmax);
+        int_cluster_t cluster = int_bvh.clusters[cluster_idx];
+        auto y_ref = intersect_bbox(octant, w, cluster.ref_bounds, b, ray.tmax);
         if (!y_ref.has_value())
             return false;
 
         statistics.push_cluster++;
         cluster_data_t ret{};
         ret.cluster_idx = cluster_idx;
-        ret.local_nodes = &int_bvh.nodes[curr_cluster.node_offset];
-        ret.local_trigs = &int_bvh.trigs[curr_cluster.trig_offset];
-        ret.inv_sx_inv_sw = curr_cluster.inv_sx_inv_sw;
+        ret.local_nodes = &int_bvh.nodes[cluster.node_offset];
+        ret.local_trigs = &int_bvh.trigs[cluster.trig_offset];
+        ret.inv_sx_inv_sw = cluster.inv_sx_inv_sw;
         ret.y_ref = y_ref.value();
         for (int i = 0; i < 3; i++) {
-            float o_local = ray.origin[i] + y_ref.value() * ray.direction[i] - curr_cluster.ref_bounds[2 * i];
+            float o_local = ray.origin[i] + y_ref.value() * ray.direction[i] - cluster.ref_bounds[2 * i];
             ret.qb_l[i] = floor_to_int32(-o_local * w[i] * ret.inv_sx_inv_sw);
             ret.qb_h[i] = ret.qb_l[i] + 1;
         }
