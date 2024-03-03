@@ -196,7 +196,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         ret.cluster_idx = cluster_idx;
         ret.local_nodes = &int_bvh.nodes[curr_cluster.node_offset];
         ret.local_trigs = &int_bvh.trigs[curr_cluster.trig_offset];
-        ret.inv_sx_inv_sw = int_bvh.inv_sx_inv_sw[cluster_idx];
+        ret.inv_sx_inv_sw = curr_cluster.inv_sx_inv_sw;
         ret.y_ref = y_ref.value();
         for (int i = 0; i < 3; i++) {
             float o_local = ray.origin[i] + y_ref.value() * ray.direction[i] - curr_cluster.ref_bounds[2 * i];
