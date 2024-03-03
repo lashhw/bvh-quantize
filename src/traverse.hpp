@@ -181,38 +181,41 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
     int_w_t int_w = get_int_w(w);
     uint8_t global_tmax_version = 0;
 
+    cluster_data_t cluster_data = {
+        .num_nodes_in_stk_2 = 0
+    };
     std::stack<cluster_data_t> stk_1;
     std::stack<std::pair<uint16_t, uint16_t>> stk_2;  // [local_node_idx, cluster_idx]
 
-    auto push_cluster = [&](uint16_t cluster_idx) -> bool {
+    auto update_cluster_data = [&](uint16_t cluster_idx) -> bool {
         statistics.intersect_bbox++;
         int_cluster_t cluster = int_bvh.clusters[cluster_idx];
         auto y_ref = intersect_bbox(octant, w, cluster.ref_bounds, b, ray.tmax);
         if (!y_ref.has_value())
             return false;
 
+        if (cluster_data.num_nodes_in_stk_2 != 0)
+            stk_1.push(cluster_data);
+
         statistics.push_cluster++;
-        cluster_data_t ret{};
-        ret.cluster_idx = cluster_idx;
-        ret.local_nodes = &int_bvh.nodes[cluster.node_offset];
-        ret.local_trigs = &int_bvh.trigs[cluster.trig_offset];
-        ret.inv_sx_inv_sw = cluster.inv_sx_inv_sw;
-        ret.y_ref = y_ref.value();
+        cluster_data.cluster_idx = cluster_idx;
+        cluster_data.local_nodes = &int_bvh.nodes[cluster.node_offset];
+        cluster_data.local_trigs = &int_bvh.trigs[cluster.trig_offset];
+        cluster_data.inv_sx_inv_sw = cluster.inv_sx_inv_sw;
+        cluster_data.y_ref = y_ref.value();
         for (int i = 0; i < 3; i++) {
             float o_local = ray.origin[i] + y_ref.value() * ray.direction[i] - cluster.ref_bounds[2 * i];
-            ret.qb_l[i] = floor_to_int32(-o_local * w[i] * ret.inv_sx_inv_sw);
-            ret.qb_h[i] = ret.qb_l[i] + 1;
+            cluster_data.qb_l[i] = floor_to_int32(-o_local * w[i] * cluster_data.inv_sx_inv_sw);
+            cluster_data.qb_h[i] = cluster_data.qb_l[i] + 1;
         }
-        ret.tmax_version = global_tmax_version;
-        ret.qy_max = ceil_to_int32((ray.tmax - ret.y_ref) * ret.inv_sx_inv_sw);
-        ret.num_nodes_in_stk_2 = 0;
-
-        stk_1.push(ret);
+        cluster_data.tmax_version = global_tmax_version;
+        cluster_data.qy_max = ceil_to_int32((ray.tmax - cluster_data.y_ref) * cluster_data.inv_sx_inv_sw);
+        cluster_data.num_nodes_in_stk_2 = 0;
         return true;
     };
 
-    // intersect top cluster
-    if (!push_cluster(0))
+    // intersect root cluster
+    if (!update_cluster_data(0))
         return std::nullopt;
 
     uint16_t left_local_node_idx = 0;
@@ -222,30 +225,28 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
                 left_local_node_idx = decoded_data.idx;
                 return true;
             case child_type_t::SWITCH:
-                if (stk_1.top().num_nodes_in_stk_2 == 0)
-                    stk_1.pop();
                 left_local_node_idx = 0;
-                return push_cluster(decoded_data.idx);
+                return update_cluster_data(decoded_data.idx);
             default:
                 assert(false);
         }
     };
 
     while (true) {
-        int_node_t* left_node = &stk_1.top().local_nodes[left_local_node_idx];
+        int_node_t* left_node = &cluster_data.local_nodes[left_local_node_idx];
         int_node_t* right_node = left_node + 1;
 
-        if (stk_1.top().tmax_version != global_tmax_version) {
+        if (cluster_data.tmax_version != global_tmax_version) {
             statistics.recompute_qymax++;
-            stk_1.top().tmax_version = global_tmax_version;
-            stk_1.top().qy_max = ceil_to_int32((ray.tmax - stk_1.top().y_ref) * stk_1.top().inv_sx_inv_sw);
+            cluster_data.tmax_version = global_tmax_version;
+            cluster_data.qy_max = ceil_to_int32((ray.tmax - cluster_data.y_ref) * cluster_data.inv_sx_inv_sw);
         }
 
         statistics.traversal_steps++;
-        auto distance_left = intersect_int_bbox(stk_1.top().qy_max, int_w, left_node->bounds,
-                                                stk_1.top().qb_l, stk_1.top().qb_h);
-        auto distance_right = intersect_int_bbox(stk_1.top().qy_max, int_w, right_node->bounds,
-                                                 stk_1.top().qb_l, stk_1.top().qb_h);
+        auto distance_left = intersect_int_bbox(cluster_data.qy_max, int_w, left_node->bounds,
+                                                cluster_data.qb_l, cluster_data.qb_h);
+        auto distance_right = intersect_int_bbox(cluster_data.qy_max, int_w, right_node->bounds,
+                                                 cluster_data.qb_l, cluster_data.qb_h);
 
         decoded_data_t left_decoded_data = decode_data(left_node->data);
         decoded_data_t right_decoded_data = decode_data(right_node->data);
@@ -255,7 +256,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
 
         if (distance_left.has_value()) {
             if (left_decoded_data.child_type == child_type_t::LEAF) {
-                if (auto hit = intersect_leaf(left_decoded_data, stk_1.top().local_trigs, ray, statistics)) {
+                if (auto hit = intersect_leaf(left_decoded_data, cluster_data.local_trigs, ray, statistics)) {
                     best_hit = hit;
                     global_tmax_version++;
                 }
@@ -266,7 +267,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
 
         if (distance_right.has_value()) {
             if (right_decoded_data.child_type == child_type_t::LEAF) {
-                if (auto hit = intersect_leaf(right_decoded_data, stk_1.top().local_trigs, ray, statistics)) {
+                if (auto hit = intersect_leaf(right_decoded_data, cluster_data.local_trigs, ray, statistics)) {
                     best_hit = hit;
                     global_tmax_version++;
                 }
@@ -286,8 +287,8 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
                 // push to stk_2
                 switch (right_decoded_data.child_type) {
                     case child_type_t::INTERNAL:
-                        stk_1.top().num_nodes_in_stk_2++;
-                        stk_2.emplace(right_decoded_data.idx, stk_1.top().cluster_idx);
+                        cluster_data.num_nodes_in_stk_2++;
+                        stk_2.emplace(right_decoded_data.idx, cluster_data.cluster_idx);
                         break;
                     case child_type_t::SWITCH:
                         stk_2.emplace(0, right_decoded_data.idx);
@@ -307,18 +308,16 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         if (stk_2.empty())
             break;
 
-        // if no node in stack is associated with this cluster, this cluster will not be used anymore
-        if (!stk_1.empty() && stk_1.top().num_nodes_in_stk_2 == 0)
-            stk_1.pop();
-
         // pop from stk_2 until we found a valid node
         while (true) {
             if ((!stk_1.empty() && stk_1.top().cluster_idx == stk_2.top().second)) {
+                cluster_data = stk_1.top();
+                stk_1.pop();
+                cluster_data.num_nodes_in_stk_2--;
                 left_local_node_idx = stk_2.top().first;
-                stk_1.top().num_nodes_in_stk_2--;
                 stk_2.pop();
                 break;
-            } else if (push_cluster(stk_2.top().second)) {
+            } else if (update_cluster_data(stk_2.top().second)) {
                 left_local_node_idx = stk_2.top().first;
                 stk_2.pop();
                 break;
