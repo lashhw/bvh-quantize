@@ -65,7 +65,8 @@ int main(int argc, char* argv[]) {
     assert(strncmp(ack, "ack\n", 5) == 0);
 
     for (ray_t &ray : rays) {
-        auto tmp = int_traverse(int_bvh, ray);
+        statistics_t statistics;
+        auto tmp = int_traverse(int_bvh, ray, statistics);
         if (tmp) {
             int_result.t = tmp->t;
             int_result.u = tmp->u;
