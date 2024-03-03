@@ -26,6 +26,7 @@ constexpr size_t max_trig_in_leaf_size = (1 << field_b_bits) - 1;
 constexpr int max_trig_in_cluster_size = max_node_in_cluster_size;
 constexpr int max_cluster_size = (1 << 15);
 
+constexpr auto inv_sw = static_cast<float>(1 << 7);
 constexpr int qx_max = (1 << 8) - 1;
 
 typedef bvh::Bvh<float> bvh_t;
@@ -68,8 +69,7 @@ struct int_bvh_t {
     // clusters[0] is the top cluster
     int num_clusters = 0;
     std::unique_ptr<int_cluster_t[]> clusters;
-    // TODO: inv_sx can be substituted with inv_sx * inv_sw
-    std::unique_ptr<float[]> inv_sx;
+    std::unique_ptr<float[]> inv_sx_inv_sw;
     std::unique_ptr<trig_t[]> trigs;
     std::unique_ptr<int_node_t[]> nodes;
 };
@@ -386,7 +386,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
     int_bvh_t int_bvh;
     int_bvh.num_clusters = num_clusters;
     int_bvh.clusters = std::make_unique<int_cluster_t[]>(num_clusters);
-    int_bvh.inv_sx = std::make_unique<float[]>(num_clusters);
+    int_bvh.inv_sx_inv_sw = std::make_unique<float[]>(num_clusters);
     int_bvh.trigs = std::make_unique<trig_t[]>(trigs.size());
     int_bvh.nodes = std::make_unique<int_node_t[]>(bvh.node_count);
     std::cout << sizeof(node_t) << std::endl;
@@ -410,7 +410,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
         int_bvh.clusters[i].trig_offset = tmp_trig_offset;
 
         // fill int_bvh.scaling_factors[i]
-        int_bvh.inv_sx[i] = 1.0f / scaling_factors[i];
+        int_bvh.inv_sx_inv_sw[i] = inv_sw / scaling_factors[i];
 
         // fill int_bvh.trigs
         int tmp_local_trig_offset = 0;
@@ -609,7 +609,7 @@ void gen_scene_visualization(const bvh_t& bvh, const int_bvh_t& int_bvh) {
 
         bbox_t quant_bbox;
         for (int i = 0; i < 3; i++) {
-            float scaling_factor = 1.0f / int_bvh.inv_sx[curr_cluster_idx];
+            float scaling_factor = inv_sw / int_bvh.inv_sx_inv_sw[curr_cluster_idx];
             quant_bbox.min[i] = curr_cluster.ref_bounds[i * 2] + scaling_factor * (float)curr_int_node.bounds[i * 2];
             quant_bbox.max[i] = curr_cluster.ref_bounds[i * 2] + scaling_factor * (float)curr_int_node.bounds[i * 2 + 1];
             assert(std::isfinite(quant_bbox.min[i]));

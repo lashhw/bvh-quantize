@@ -1,8 +1,6 @@
 #ifndef TRAVERSE_HPP
 #define TRAVERSE_HPP
 
-constexpr auto inv_sw = static_cast<float>(1 << 7);
-
 typedef bvh::Ray<float> ray_t;
 typedef trig_t::Intersection intersection_t;
 
@@ -10,7 +8,7 @@ struct cluster_data_t {
     uint16_t cluster_idx;
     int_node_t* local_nodes;
     trig_t* local_trigs;
-    float inv_sx;
+    float inv_sx_inv_sw;
     float y_ref;
     int32_t qb_l[3];
     int32_t qb_h[3];
@@ -198,15 +196,15 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         ret.cluster_idx = cluster_idx;
         ret.local_nodes = &int_bvh.nodes[curr_cluster.node_offset];
         ret.local_trigs = &int_bvh.trigs[curr_cluster.trig_offset];
-        ret.inv_sx = int_bvh.inv_sx[cluster_idx];
+        ret.inv_sx_inv_sw = int_bvh.inv_sx_inv_sw[cluster_idx];
         ret.y_ref = y_ref.value();
         for (int i = 0; i < 3; i++) {
             float o_local = ray.origin[i] + y_ref.value() * ray.direction[i] - curr_cluster.ref_bounds[2 * i];
-            ret.qb_l[i] = floor_to_int32(-o_local * w[i] * ret.inv_sx * inv_sw);
+            ret.qb_l[i] = floor_to_int32(-o_local * w[i] * ret.inv_sx_inv_sw);
             ret.qb_h[i] = ret.qb_l[i] + 1;
         }
         ret.tmax_version = global_tmax_version;
-        ret.qy_max = ceil_to_int32((ray.tmax - ret.y_ref) * ret.inv_sx * inv_sw);
+        ret.qy_max = ceil_to_int32((ray.tmax - ret.y_ref) * ret.inv_sx_inv_sw);
         ret.num_nodes_in_stk_2 = 0;
 
         stk_1.push(ret);
@@ -240,7 +238,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         if (stk_1.top().tmax_version != global_tmax_version) {
             statistics.recompute_qymax++;
             stk_1.top().tmax_version = global_tmax_version;
-            stk_1.top().qy_max = ceil_to_int32((ray.tmax - stk_1.top().y_ref) * stk_1.top().inv_sx * inv_sw);
+            stk_1.top().qy_max = ceil_to_int32((ray.tmax - stk_1.top().y_ref) * stk_1.top().inv_sx_inv_sw);
         }
 
         statistics.traversal_steps++;
