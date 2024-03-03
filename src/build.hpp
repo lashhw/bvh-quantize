@@ -403,11 +403,9 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
         // fill int_bvh.clusters[i]
         for (int j = 0; j < 6; j++)
             int_bvh.clusters[i].ref_bounds[j] = bvh.nodes[ref_indices[i]].bounds[j];
+        int_bvh.clusters[i].inv_sx_inv_sw = inv_sw / scaling_factors[i];
         int_bvh.clusters[i].node_offset = tmp_node_offset;
         int_bvh.clusters[i].trig_offset = tmp_trig_offset;
-
-        // fill int_bvh.scaling_factors[i]
-        int_bvh.clusters[i].inv_sx_inv_sw = inv_sw / scaling_factors[i];
 
         // fill int_bvh.trigs
         int tmp_local_trig_offset = 0;
