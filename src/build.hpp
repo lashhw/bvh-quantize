@@ -389,6 +389,16 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
     int_bvh.inv_sx = std::make_unique<float[]>(num_clusters);
     int_bvh.trigs = std::make_unique<trig_t[]>(trigs.size());
     int_bvh.nodes = std::make_unique<int_node_t[]>(bvh.node_count);
+    std::cout << sizeof(node_t) << std::endl;
+    std::cout << "bvh: " << bvh.node_count * sizeof(node_t) << std::endl;
+    std::cout << sizeof(int_cluster_t) << std::endl;
+    std::cout << sizeof(float) << std::endl;
+    std::cout << sizeof(int_node_t) << std::endl;
+    std::cout << "int_bvh: " << num_clusters * sizeof(int_cluster_t) +
+                 num_clusters * sizeof(float) +
+                 bvh.node_count * sizeof(int_node_t) << std::endl;
+    std::cout << sizeof(trig_t) << std::endl;
+    std::cout << "trig: " << trigs.size() * sizeof(trig_t) << std::endl;
     std::vector<size_t> local_trig_idx_map(bvh.node_count);
     size_t tmp_node_offset = 0;
     size_t tmp_trig_offset = 0;
