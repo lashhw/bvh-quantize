@@ -204,8 +204,10 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         cluster_data.inv_sx_inv_sw = cluster.inv_sx_inv_sw;
         cluster_data.y_ref = y_ref.value();
         for (int i = 0; i < 3; i++) {
-            float o_local = ray.origin[i] + y_ref.value() * ray.direction[i] - cluster.ref_bounds[2 * i];
-            cluster_data.qb_l[i] = floor_to_int32(-o_local * w[i] * cluster_data.inv_sx_inv_sw);
+            //float o_local = ray.origin[i] + y_ref.value() * ray.direction[i] - cluster.ref_bounds[2 * i];
+            //cluster_data.qb_l[i] = floor_to_int32(-o_local * w[i] * cluster_data.inv_sx_inv_sw);
+            cluster_data.qb_l[i] = floor_to_int32((b[i] - y_ref.value() + cluster.ref_bounds[2 * i] * w[i]) *
+                                                  cluster_data.inv_sx_inv_sw);
             cluster_data.qb_h[i] = cluster_data.qb_l[i] + 1;
         }
         cluster_data.tmax_version = global_tmax_version;
