@@ -310,26 +310,28 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
 
         // pop from stk_2 until we found a valid node
         while (true) {
-            if ((!stk_1.empty() && stk_1.top().cluster_idx == stk_2.top().second)) {
+            left_local_node_idx = stk_2.top().first;
+            int cluster_idx = stk_2.top().second;
+            stk_2.pop();
+            if (cluster_data.cluster_idx == cluster_idx) {
+                cluster_data.num_nodes_in_stk_2--;
+                break;
+            }
+            if ((!stk_1.empty() && stk_1.top().cluster_idx == cluster_idx)) {
                 cluster_data = stk_1.top();
                 stk_1.pop();
                 cluster_data.num_nodes_in_stk_2--;
-                left_local_node_idx = stk_2.top().first;
-                stk_2.pop();
                 break;
-            } else if (update_cluster_data(stk_2.top().second)) {
-                left_local_node_idx = stk_2.top().first;
-                stk_2.pop();
-                break;
-            } else {
-                stk_2.pop();
-                if (stk_2.empty())
-                    goto end;
             }
+            if (update_cluster_data(cluster_idx))
+                break;
+            if (stk_2.empty())
+                goto end;
         }
     }
 
     end:
+    assert(stk_1.empty());
     if (best_hit.has_value())
         statistics.finalize++;
     return best_hit;
