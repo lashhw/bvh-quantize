@@ -236,6 +236,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         int_node_t* left_node = &cluster_data.local_nodes[left_local_node_idx];
         int_node_t* right_node = left_node + 1;
 
+        // optional, but can reduce traversal steps
         if (cluster_data.tmax_version != global_tmax_version) {
             statistics.recompute_qymax++;
             cluster_data.tmax_version = global_tmax_version;
@@ -304,12 +305,10 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
                 continue;
         }
 
-        // see if there is any node in stack
-        if (stk_2.empty())
-            break;
-
         // pop from stk_2 until we found a valid node
         while (true) {
+            if (stk_2.empty())
+                goto end;
             left_local_node_idx = stk_2.top().first;
             int cluster_idx = stk_2.top().second;
             stk_2.pop();
@@ -325,8 +324,6 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
             }
             if (update_cluster_data(cluster_idx))
                 break;
-            if (stk_2.empty())
-                goto end;
         }
     }
 
