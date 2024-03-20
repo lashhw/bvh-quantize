@@ -1,6 +1,8 @@
 #ifndef TRAVERSE_HPP
 #define TRAVERSE_HPP
 
+namespace bvh_quantize {
+
 typedef bvh::Ray<float> ray_t;
 typedef trig_t::Intersection intersection_t;
 
@@ -335,5 +337,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         statistics.finalize++;
     return best_hit;
 }
+
+}  // namespace bvh_quantize
 
 #endif //TRAVERSE_HPP

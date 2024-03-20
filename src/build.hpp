@@ -7,6 +7,8 @@
 #include <bvh/sweep_sah_builder.hpp>
 #include "happly/happly.h"
 
+namespace bvh_quantize {
+
 // int_node_t::data format (assume field_b_bits = 3):
 // INTERNAL: |1|0|0|0|-|-|-|-|-|-|-|-|-|-|-|-|
 //     LEAF: |1|*|*|*|-|-|-|-|-|-|-|-|-|-|-|-|
@@ -687,5 +689,7 @@ void gen_scene_visualization(const bvh_t& bvh, const int_bvh_t& int_bvh) {
         }
     }
 }
+
+}  // namespace bvh_quantize
 
 #endif //BUILD_HPP

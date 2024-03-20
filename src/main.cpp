@@ -3,6 +3,7 @@
 #include <bvh/single_ray_traverser.hpp>
 #include <bvh/primitive_intersectors.hpp>
 
+using namespace bvh_quantize;
 typedef bvh::SingleRayTraverser<bvh_t> traverser_t;
 typedef bvh::ClosestPrimitiveIntersector<bvh_t, trig_t> primitive_intersector_t;
 
