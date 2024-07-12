@@ -511,7 +511,7 @@ decoded_data_t decode_data(uint16_t data) {
     return decoded_data;
 }
 
-void gen_tree_visualization(const int_bvh_t& int_bvh) {
+void gen_tree_visualization_and_report_stack_size_requirement(const int_bvh_t& int_bvh) {
     uint32_t root_left_node_idx = int_bvh.clusters[0].node_offset;
     uint32_t root_right_node_idx = root_left_node_idx + 1;
     std::array<std::string, 2> cmap = {"black", "red"};
@@ -528,11 +528,14 @@ void gen_tree_visualization(const int_bvh_t& int_bvh) {
     graph_fs << "    R -> " << root_left_node_idx << " [color=" << cmap[0] << "]\n";
     graph_fs << "    R -> " << root_right_node_idx << " [color=" << cmap[0] << "]\n";
 
-    std::queue<std::tuple<int, int, int, int>> que;
-    que.emplace(root_left_node_idx, 0, 0, 1);
-    que.emplace(root_right_node_idx, 0, 0, 1);
+    int node_stack_size_requirement = 0;
+    int cluster_stack_size_requirement = 0;
+
+    std::queue<std::tuple<int, int, int, int, int>> que;
+    que.emplace(root_left_node_idx, 0, 0, 1, 0);
+    que.emplace(root_right_node_idx, 0, 0, 1, 0);
     while (!que.empty()) {
-        auto [curr_node_idx, curr_cluster_idx, curr_color, curr_depth] = que.front();
+        auto [curr_node_idx, curr_cluster_idx, curr_color, curr_depth, curr_cluster_depth] = que.front();
         int_node_t& curr_node = int_bvh.nodes[curr_node_idx];
         int_cluster_t& curr_cluster = int_bvh.clusters[curr_cluster_idx];
         que.pop();
@@ -544,15 +547,19 @@ void gen_tree_visualization(const int_bvh_t& int_bvh) {
         uint32_t right_node_idx;
         int child_color;
         int child_depth = curr_depth + 1;
+        int child_cluster_depth;
         switch (decoded_data.child_type) {
             case child_type_t::INTERNAL: {
                 child_cluster_idx = curr_cluster_idx;
                 left_node_idx = curr_cluster.node_offset + decoded_data.idx;
                 right_node_idx = left_node_idx + 1;
                 child_color = curr_color;
+                child_cluster_depth = curr_cluster_depth;
                 break;
             }
             case child_type_t::LEAF: {
+                node_stack_size_requirement = std::max(node_stack_size_requirement, curr_depth);
+                cluster_stack_size_requirement = std::max(cluster_stack_size_requirement, curr_cluster_depth);
                 continue;  // this continue is related to the while loop
             }
             case child_type_t::SWITCH: {
@@ -561,12 +568,13 @@ void gen_tree_visualization(const int_bvh_t& int_bvh) {
                 left_node_idx = child_cluster.node_offset;
                 right_node_idx = left_node_idx + 1;
                 child_color = (curr_color + 1) % 2;
+                child_cluster_depth = curr_cluster_depth + 1;
                 break;
             }
         }
 
-        que.emplace(left_node_idx, child_cluster_idx, child_color, child_depth);
-        que.emplace(right_node_idx, child_cluster_idx, child_color, child_depth);
+        que.emplace(left_node_idx, child_cluster_idx, child_color, child_depth, child_cluster_depth);
+        que.emplace(right_node_idx, child_cluster_idx, child_color, child_depth, child_cluster_depth);
         graph_fs << "    " << left_node_idx << " [depth=" << child_depth << "]\n";
         graph_fs << "    " << right_node_idx << " [depth=" << child_depth << "]\n";
         graph_fs << "    " << curr_node_idx << " -> " << left_node_idx << " [color=" << cmap[child_color] << "]\n";
@@ -574,6 +582,9 @@ void gen_tree_visualization(const int_bvh_t& int_bvh) {
     }
 
     graph_fs << "}";
+
+    std::cout << "node_stack_size_requirement = " << node_stack_size_requirement << std::endl;
+    std::cout << "cluster_stack_size_requirement = " << cluster_stack_size_requirement << std::endl;
 }
 
 void gen_scene_visualization(const bvh_t& bvh, const int_bvh_t& int_bvh) {
