@@ -64,7 +64,6 @@ int main(int argc, char *argv[]) {
 
     std::cout << "(quantized)" << std::endl;
     std::cout << "  intersect_bbox: " << int_statistics.intersect_bbox << std::endl;
-    std::cout << "  push_cluster: " << int_statistics.push_cluster << std::endl;
     std::cout << "  recompute_qymax: " << int_statistics.recompute_qymax << std::endl;
     std::cout << "  traversal_steps: " << int_statistics.traversal_steps << std::endl;
     std::cout << "  both_intersected: " << int_statistics.both_intersected << std::endl;

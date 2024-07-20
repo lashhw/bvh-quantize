@@ -14,9 +14,7 @@ struct cluster_data_t {
     float y_ref;
     int32_t qb_l[3];
     int32_t qb_h[3];
-    uint8_t tmax_version;
     int32_t qy_max;
-    uint8_t num_nodes_in_stk_2;
 };
 
 struct int_w_t {
@@ -36,7 +34,6 @@ struct statistics_t {
         } traversal_steps, both_intersected, finalize;
     } bvh_statistics;
     uintmax_t intersect_bbox = 0;
-    uintmax_t push_cluster = 0;
     uintmax_t recompute_qymax = 0;
     uintmax_t traversal_steps = 0;
     uintmax_t both_intersected = 0;
@@ -181,12 +178,9 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         -ray.origin[2] * w[2]
     };
     int_w_t int_w = get_int_w(w);
-    uint8_t global_tmax_version = 0;
+    bool recompute_qymax = false;
 
-    cluster_data_t cluster_data = {
-        .num_nodes_in_stk_2 = 0
-    };
-    std::stack<cluster_data_t> stk_1;
+    cluster_data_t cluster_data;
     std::stack<std::pair<uint16_t, uint16_t>> stk_2;  // [local_node_idx, cluster_idx]
 
     auto update_cluster_data = [&](uint16_t cluster_idx) -> bool {
@@ -196,10 +190,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         if (!y_ref.has_value())
             return false;
 
-        if (cluster_data.num_nodes_in_stk_2 != 0)
-            stk_1.push(cluster_data);
-
-        statistics.push_cluster++;
+        recompute_qymax = false;
         cluster_data.cluster_idx = cluster_idx;
         cluster_data.local_nodes = &int_bvh.nodes[cluster.node_offset];
         cluster_data.local_trigs = &int_bvh.trigs[cluster.trig_offset];
@@ -212,9 +203,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
                                                   cluster_data.inv_sx_inv_sw);
             cluster_data.qb_h[i] = cluster_data.qb_l[i] + 1;
         }
-        cluster_data.tmax_version = global_tmax_version;
         cluster_data.qy_max = ceil_to_int32((ray.tmax - cluster_data.y_ref) * cluster_data.inv_sx_inv_sw);
-        cluster_data.num_nodes_in_stk_2 = 0;
         return true;
     };
 
@@ -241,12 +230,13 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         int_node_t* right_node = left_node + 1;
 
         // optional, but can reduce traversal steps
-        if (cluster_data.tmax_version != global_tmax_version) {
+        if (recompute_qymax) {
             statistics.recompute_qymax++;
-            cluster_data.tmax_version = global_tmax_version;
+            recompute_qymax = false;
             cluster_data.qy_max = ceil_to_int32((ray.tmax - cluster_data.y_ref) * cluster_data.inv_sx_inv_sw);
         }
 
+        int nbp_idx = ((&cluster_data.local_nodes[left_local_node_idx]) - int_bvh.nodes.get()) / 2;
         statistics.traversal_steps++;
         auto distance_left = intersect_int_bbox(cluster_data.qy_max, int_w, left_node->bounds,
                                                 cluster_data.qb_l, cluster_data.qb_h);
@@ -263,7 +253,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
             if (left_decoded_data.child_type == child_type_t::LEAF) {
                 if (auto hit = intersect_leaf(left_decoded_data, cluster_data.local_trigs, ray, statistics)) {
                     best_hit = hit;
-                    global_tmax_version++;
+                    recompute_qymax = true;
                 }
             } else {
                 left_hit = true;
@@ -274,7 +264,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
             if (right_decoded_data.child_type == child_type_t::LEAF) {
                 if (auto hit = intersect_leaf(right_decoded_data, cluster_data.local_trigs, ray, statistics)) {
                     best_hit = hit;
-                    global_tmax_version++;
+                    recompute_qymax = true;
                 }
             } else {
                 right_hit = true;
@@ -292,7 +282,6 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
                 // push to stk_2
                 switch (right_decoded_data.child_type) {
                     case child_type_t::INTERNAL:
-                        cluster_data.num_nodes_in_stk_2++;
                         stk_2.emplace(right_decoded_data.idx, cluster_data.cluster_idx);
                         break;
                     case child_type_t::SWITCH:
@@ -316,23 +305,14 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
             left_local_node_idx = stk_2.top().first;
             int cluster_idx = stk_2.top().second;
             stk_2.pop();
-            if (cluster_data.cluster_idx == cluster_idx) {
-                cluster_data.num_nodes_in_stk_2--;
+            if (cluster_data.cluster_idx == cluster_idx)
                 break;
-            }
-            if ((!stk_1.empty() && stk_1.top().cluster_idx == cluster_idx)) {
-                cluster_data = stk_1.top();
-                stk_1.pop();
-                cluster_data.num_nodes_in_stk_2--;
-                break;
-            }
             if (update_cluster_data(cluster_idx))
                 break;
         }
     }
 
     end:
-    assert(stk_1.empty());
     if (best_hit.has_value())
         statistics.finalize++;
     return best_hit;
