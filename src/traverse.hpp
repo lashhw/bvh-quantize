@@ -236,7 +236,6 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
             cluster_data.qy_max = ceil_to_int32((ray.tmax - cluster_data.y_ref) * cluster_data.inv_sx_inv_sw);
         }
 
-        int nbp_idx = ((&cluster_data.local_nodes[left_local_node_idx]) - int_bvh.nodes.get()) / 2;
         statistics.traversal_steps++;
         auto distance_left = intersect_int_bbox(cluster_data.qy_max, int_w, left_node->bounds,
                                                 cluster_data.qb_l, cluster_data.qb_h);
