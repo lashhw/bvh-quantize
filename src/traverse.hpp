@@ -253,8 +253,8 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         auto distance_right = intersect_int_bbox(cluster_data.qy_max, int_w, right_node->bounds,
                                                  cluster_data.qb_l, cluster_data.qb_h);
 
-        decoded_data_t left_decoded_data = decode_data(left_node->data);
-        decoded_data_t right_decoded_data = decode_data(right_node->data);
+        decoded_data_t left_decoded_data = left_node->data;
+        decoded_data_t right_decoded_data = right_node->data;
 
         bool left_hit = false;
         bool right_hit = false;

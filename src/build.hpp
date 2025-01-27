@@ -56,9 +56,15 @@ enum class child_type_t {
     SWITCH     // children are in different cluster
 };
 
+struct decoded_data_t {
+    child_type_t child_type;
+    uint8_t num_trigs;
+    uint16_t idx;
+};
+
 struct int_node_t {
     uint8_t bounds[6];
-    uint16_t data;
+    decoded_data_t data;
 };
 
 struct int_cluster_t {
@@ -74,12 +80,6 @@ struct int_bvh_t {
     std::unique_ptr<int_cluster_t[]> clusters;
     std::unique_ptr<trig_t[]> trigs;
     std::unique_ptr<int_node_t[]> nodes;
-};
-
-struct decoded_data_t {
-    child_type_t child_type;
-    uint8_t num_trigs;
-    uint16_t idx;
 };
 
 int32_t floor_to_int32(float x) {
@@ -448,6 +448,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
             }
 
             // fill curr_int_node.data
+            curr_int_node.data.child_type = child_type;
             switch (child_type) {
                 case child_type_t::INTERNAL: {
                     size_t field_c = local_node_idx_map[left_node_idx];
@@ -455,7 +456,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
                         std::cerr << "internal node cannot fit!" << std::endl;
                         exit(EXIT_FAILURE);
                     }
-                    curr_int_node.data = 0x8000 | field_c;
+                    curr_int_node.data.idx = field_c;
                     break;
                 }
                 case child_type_t::LEAF: {
@@ -465,7 +466,8 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
                         std::cerr << "leaf node cannot fit!" << std::endl;
                         exit(EXIT_FAILURE);
                     }
-                    curr_int_node.data = 0x8000 | (field_b << field_c_bits) | field_c;
+                    curr_int_node.data.num_trigs = field_b;
+                    curr_int_node.data.idx = field_c;
                     break;
                 }
                 case child_type_t::SWITCH: {
@@ -474,7 +476,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
                         std::cerr << "switch node cannot fit!" << std::endl;
                         exit(EXIT_FAILURE);
                     }
-                    curr_int_node.data = field_bc;
+                    curr_int_node.data.idx = field_bc;
                     break;
                 }
             }
@@ -482,25 +484,6 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
     }
 
     return int_bvh;
-}
-
-decoded_data_t decode_data(uint16_t data) {
-    decoded_data_t decoded_data{};
-    if (data & 0x8000) {
-        int field_b = ((data & 0x7fff) >> field_c_bits);
-        int field_c = (data & ((1 << field_c_bits) - 1));
-        if (field_b == 0) {
-            decoded_data.child_type = child_type_t::INTERNAL;
-        } else {
-            decoded_data.child_type = child_type_t::LEAF;
-            decoded_data.num_trigs = field_b;
-        }
-        decoded_data.idx = field_c;
-    } else {
-        decoded_data.child_type = child_type_t::SWITCH;
-        decoded_data.idx = data;
-    }
-    return decoded_data;
 }
 
 void gen_tree_visualization_and_report_stack_size_requirement(const int_bvh_t& int_bvh) {
@@ -532,7 +515,7 @@ void gen_tree_visualization_and_report_stack_size_requirement(const int_bvh_t& i
         int_cluster_t& curr_cluster = int_bvh.clusters[curr_cluster_idx];
         que.pop();
 
-        decoded_data_t decoded_data = decode_data(curr_node.data);
+        decoded_data_t decoded_data = curr_node.data;
 
         int child_cluster_idx;
         uint32_t left_node_idx;
@@ -617,7 +600,7 @@ void gen_scene_visualization(const bvh_t& bvh, const int_bvh_t& int_bvh) {
         }
         quant_bboxes_by_cluster[curr_cluster_idx].push_back(quant_bbox);
 
-        decoded_data_t decoded_data = decode_data(curr_int_node.data);
+        decoded_data_t decoded_data = curr_int_node.data;
 
         int child_cluster_idx;
         size_t left_node_idx = curr_node.first_child_or_primitive;
