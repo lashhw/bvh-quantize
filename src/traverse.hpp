@@ -3,15 +3,15 @@
 
 namespace bvh_quantize {
 
-typedef bvh::Ray<float> ray_t;
+typedef bvh::Ray<double> ray_t;
 typedef trig_t::Intersection intersection_t;
 
 struct cluster_data_t {
     uint16_t cluster_idx;
     int_node_t* local_nodes;
     trig_t* local_trigs;
-    float inv_sx_inv_sw;
-    float y_ref;
+    double inv_sx_inv_sw;
+    double y_ref;
     int32_t qb_l[3];
     int32_t qb_h[3];
     uint8_t tmax_version;
@@ -43,11 +43,12 @@ struct statistics_t {
     uintmax_t finalize = 0;
 };
 
-int_w_t get_int_w(const std::array<float, 3>& w) {
+int_w_t get_int_w(const std::array<double, 3>& w) {
     int_w_t int_w{};
 
     for (int i = 0; i < 3; i++) {
-        auto& wi = reinterpret_cast<const uint32_t&>(w[i]);
+        auto w_fp32 = static_cast<float>(w[i]);
+        auto& wi = reinterpret_cast<const uint32_t&>(w_fp32);
 
         bool sign = wi & 0x80000000;
         uint32_t exponent = (wi >> 23) & 0xff;
@@ -97,12 +98,12 @@ std::optional<intersection_t> intersect_leaf(const decoded_data_t& decoded_data,
     return best_hit;
 }
 
-std::optional<float> intersect_bbox(const std::array<bool, 3>& octant,
-                                    const std::array<float, 3>& w,
-                                    const float* x,
-                                    const std::array<float, 3>& b,
-                                    float tmax) {
-    float entry[3], exit[3];
+std::optional<double> intersect_bbox(const std::array<bool, 3>& octant,
+                                    const std::array<double, 3>& w,
+                                    const double* x,
+                                    const std::array<double, 3>& b,
+                                    double tmax) {
+    double entry[3], exit[3];
     entry[0] = w[0] * x[0 + octant[0]] + b[0];
     entry[1] = w[1] * x[2 + octant[1]] + b[1];
     entry[2] = w[2] * x[4 + octant[2]] + b[2];
@@ -110,8 +111,8 @@ std::optional<float> intersect_bbox(const std::array<bool, 3>& octant,
     exit[1] = w[1] * x[3 - octant[1]] + b[1];
     exit[2] = w[2] * x[5 - octant[2]] + b[2];
 
-    float entry_ = fmaxf(entry[0], fmaxf(entry[1], fmaxf(entry[2], 0.0f)));
-    float exit_ = fminf(exit[0], fminf(exit[1], fminf(exit[2], tmax)));
+    double entry_ = fmaxf(entry[0], fmaxf(entry[1], fmaxf(entry[2], 0.0f)));
+    double exit_ = fminf(exit[0], fminf(exit[1], fminf(exit[2], tmax)));
 
     if (entry_ <= exit_)
         return entry_;
@@ -170,12 +171,12 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         std::signbit(ray.direction[1]),
         std::signbit(ray.direction[2])
     };
-    std::array<float, 3> w = {
+    std::array<double, 3> w = {
         1.0f / ray.direction[0],
         1.0f / ray.direction[1],
         1.0f / ray.direction[2]
     };
-    std::array<float, 3> b = {
+    std::array<double, 3> b = {
         -ray.origin[0] * w[0],
         -ray.origin[1] * w[1],
         -ray.origin[2] * w[2]
@@ -206,7 +207,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         cluster_data.inv_sx_inv_sw = cluster.inv_sx_inv_sw;
         cluster_data.y_ref = y_ref.value();
         for (int i = 0; i < 3; i++) {
-            //float o_local = ray.origin[i] + y_ref.value() * ray.direction[i] - cluster.ref_bounds[2 * i];
+            //double o_local = ray.origin[i] + y_ref.value() * ray.direction[i] - cluster.ref_bounds[2 * i];
             //cluster_data.qb_l[i] = floor_to_int32(-o_local * w[i] * cluster_data.inv_sx_inv_sw);
             cluster_data.qb_l[i] = floor_to_int32((b[i] - y_ref.value() + cluster.ref_bounds[2 * i] * w[i]) *
                                                   cluster_data.inv_sx_inv_sw);

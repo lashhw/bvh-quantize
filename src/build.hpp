@@ -28,21 +28,21 @@ constexpr size_t max_trig_in_leaf_size = (1 << field_b_bits) - 1;
 constexpr int max_trig_in_cluster_size = max_node_in_cluster_size;
 constexpr int max_cluster_size = (1 << 15);
 
-constexpr auto inv_sw = static_cast<float>(1 << 7);
+constexpr auto inv_sw = static_cast<double>(1 << 7);
 constexpr int qx_max = (1 << 8) - 1;
 
-typedef bvh::Bvh<float> bvh_t;
-typedef bvh::Triangle<float> trig_t;
-typedef bvh::Vector3<float> vector_t;
-typedef bvh::BoundingBox<float> bbox_t;
+typedef bvh::Bvh<double> bvh_t;
+typedef bvh::Triangle<double> trig_t;
+typedef bvh::Vector3<double> vector_t;
+typedef bvh::BoundingBox<double> bbox_t;
 typedef bvh::SweepSahBuilder<bvh_t> builder_t;
 typedef bvh_t::Node node_t;
 
 struct arg_t {
     char* model_file;
-    float t_trv_int;
-    float t_switch;
-    float t_ist;
+    double t_trv_int;
+    double t_switch;
+    double t_ist;
     char* ray_file;
 };
 
@@ -68,8 +68,8 @@ struct int_node_t {
 };
 
 struct int_cluster_t {
-    float ref_bounds[6];
-    float inv_sx_inv_sw;
+    double ref_bounds[6];
+    double inv_sx_inv_sw;
     uint32_t node_offset;
     uint32_t trig_offset;
 };
@@ -82,7 +82,7 @@ struct int_bvh_t {
     std::unique_ptr<int_node_t[]> nodes;
 };
 
-int32_t floor_to_int32(float x) {
+int32_t floor_to_int32(double x) {
     assert(!std::isnan(x));
     if (x < -2147483648.0f)
         return -2147483648;
@@ -91,7 +91,7 @@ int32_t floor_to_int32(float x) {
     return (int)floorf(x);
 }
 
-int32_t ceil_to_int32(float x) {
+int32_t ceil_to_int32(double x) {
     assert(!std::isnan(x));
     if (x <= -2147483649.0f)
         return -2147483648;
@@ -100,20 +100,20 @@ int32_t ceil_to_int32(float x) {
     return (int)ceilf(x);
 }
 
-float get_scaling_factor(const bvh_t &bvh, size_t ref_idx) {
+double get_scaling_factor(const bvh_t &bvh, size_t ref_idx) {
     bbox_t ref_bbox = bvh.nodes[ref_idx].bounding_box_proxy().to_bounding_box();
 
-    float max_len = 0.0f;
+    double max_len = 0.0f;
     for (int i = 0; i < 3; i++)
         max_len = std::max(max_len, ref_bbox.max[i] - ref_bbox.min[i]);
 
-    float scaling_factor = max_len / (float)qx_max;
+    double scaling_factor = max_len / (double)qx_max;
     assert(scaling_factor > 0.0f);
     return scaling_factor;
 }
 
 // return: [qxmin, qxmax, qymin, qymax, qzmin, qzmax]
-std::array<uint8_t, 6> get_int_bounds(const bvh_t &bvh, size_t node_idx, size_t ref_idx, float scaling_factor) {
+std::array<uint8_t, 6> get_int_bounds(const bvh_t &bvh, size_t node_idx, size_t ref_idx, double scaling_factor) {
     bbox_t node_bbox = bvh.nodes[node_idx].bounding_box_proxy().to_bounding_box();
     bbox_t ref_bbox = bvh.nodes[ref_idx].bounding_box_proxy().to_bounding_box();
 
@@ -134,14 +134,14 @@ std::array<uint8_t, 6> get_int_bounds(const bvh_t &bvh, size_t node_idx, size_t 
     return ret;
 }
 
-bbox_t get_quant_bbox(const bvh_t &bvh, size_t node_idx, size_t ref_idx, float scaling_factor) {
+bbox_t get_quant_bbox(const bvh_t &bvh, size_t node_idx, size_t ref_idx, double scaling_factor) {
     bbox_t ref_bbox = bvh.nodes[ref_idx].bounding_box_proxy().to_bounding_box();
     std::array<uint8_t, 6> int_bounds = get_int_bounds(bvh, node_idx, ref_idx, scaling_factor);
 
     bbox_t ret;
     for (int i = 0; i < 3; i++) {
-        ret.min[i] = ref_bbox.min[i] + scaling_factor * (float)int_bounds[i * 2];
-        ret.max[i] = ref_bbox.min[i] + scaling_factor * (float)int_bounds[i * 2 + 1];
+        ret.min[i] = ref_bbox.min[i] + scaling_factor * (double)int_bounds[i * 2];
+        ret.max[i] = ref_bbox.min[i] + scaling_factor * (double)int_bounds[i * 2 + 1];
         assert(std::isfinite(ret.min[i]));
         assert(std::isfinite(ret.max[i]));
     }
@@ -182,9 +182,9 @@ std::vector<trig_t> load_trigs(const char* model_file) {
     std::vector<trig_t> trigs;
     for (auto &face : f_idx) {
         trigs.emplace_back(
-            vector_t((float)v_pos[face[0]][0], (float)v_pos[face[0]][1], (float)v_pos[face[0]][2]),
-            vector_t((float)v_pos[face[1]][0], (float)v_pos[face[1]][1], (float)v_pos[face[1]][2]),
-            vector_t((float)v_pos[face[2]][0], (float)v_pos[face[2]][1], (float)v_pos[face[2]][2])
+            vector_t((double)v_pos[face[0]][0], (double)v_pos[face[0]][1], (double)v_pos[face[0]][2]),
+            vector_t((double)v_pos[face[1]][0], (double)v_pos[face[1]][1], (double)v_pos[face[1]][2]),
+            vector_t((double)v_pos[face[2]][0], (double)v_pos[face[2]][1], (double)v_pos[face[2]][2])
         );
     }
     return trigs;
@@ -205,7 +205,7 @@ bvh_t build_bvh(const std::vector<trig_t>& trigs) {
     return bvh;
 }
 
-std::vector<policy_t> get_policy(float t_trv_int, float t_switch, float t_ist, const bvh_t& bvh) {
+std::vector<policy_t> get_policy(double t_trv_int, double t_switch, double t_ist, const bvh_t& bvh) {
     // stk_1: fill t_buf_size, t_buf_idx_map
     int t_buf_size = 0;
     std::vector<int> t_buf_idx_map(bvh.node_count);
@@ -235,7 +235,7 @@ std::vector<policy_t> get_policy(float t_trv_int, float t_switch, float t_ist, c
     std::vector<size_t> parent(bvh.node_count);
     parent[root_left_node_idx] = 0;
     parent[root_right_node_idx] = 0;
-    std::vector<float> t_buf(t_buf_size);
+    std::vector<double> t_buf(t_buf_size);
     std::vector<policy_t> t_policy(t_buf_size);
     std::stack<std::pair<size_t, bool>> stk_2;
     stk_2.emplace(root_right_node_idx, true);
@@ -259,23 +259,23 @@ std::vector<policy_t> get_policy(float t_trv_int, float t_switch, float t_ist, c
         } else {
             size_t ref_idx = parent[curr_node_idx];
             for (int i = 0; ; i++) {
-                float scaling_factor = get_scaling_factor(bvh, ref_idx);
+                double scaling_factor = get_scaling_factor(bvh, ref_idx);
                 bbox_t quant_bbox = get_quant_bbox(bvh, curr_node_idx, ref_idx, scaling_factor);
-                float half_area = quant_bbox.half_area();
+                double half_area = quant_bbox.half_area();
 
-                float& curr_t_buf = t_buf[t_buf_idx_map[curr_node_idx] + i];
+                double& curr_t_buf = t_buf[t_buf_idx_map[curr_node_idx] + i];
                 policy_t& curr_t_policy = t_policy[t_buf_idx_map[curr_node_idx] + i];
                 if (curr_node.is_leaf()) {
-                    curr_t_buf = t_ist * (float)curr_node.primitive_count * half_area;
+                    curr_t_buf = t_ist * (double)curr_node.primitive_count * half_area;
                 } else {
-                    float left_stay_t = t_buf[t_buf_idx_map[left_node_idx] + 1 + i];
-                    float right_stay_t = t_buf[t_buf_idx_map[right_node_idx] + 1 + i];
+                    double left_stay_t = t_buf[t_buf_idx_map[left_node_idx] + 1 + i];
+                    double right_stay_t = t_buf[t_buf_idx_map[right_node_idx] + 1 + i];
 
-                    float left_switch_t = t_buf[t_buf_idx_map[left_node_idx]];
-                    float right_switch_t = t_buf[t_buf_idx_map[right_node_idx]];
+                    double left_switch_t = t_buf[t_buf_idx_map[left_node_idx]];
+                    double right_switch_t = t_buf[t_buf_idx_map[right_node_idx]];
 
-                    float curr_stay_t = t_trv_int * 2 * half_area + left_stay_t + right_stay_t;
-                    float curr_switch_t = (t_trv_int * 2 + t_switch) * half_area + left_switch_t + right_switch_t;
+                    double curr_stay_t = t_trv_int * 2 * half_area + left_stay_t + right_stay_t;
+                    double curr_switch_t = (t_trv_int * 2 + t_switch) * half_area + left_switch_t + right_switch_t;
 
                     assert(std::isfinite(curr_stay_t));
                     assert(std::isfinite(curr_switch_t));
@@ -331,7 +331,7 @@ std::vector<policy_t> get_policy(float t_trv_int, float t_switch, float t_ist, c
     return policy;
 }
 
-int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std::vector<trig_t>& trigs,
+int_bvh_t build_int_bvh(double t_trv_int, double t_switch, double t_ist, const std::vector<trig_t>& trigs,
                         const bvh_t& bvh) {
     // fill policy
     std::vector<policy_t> policy = get_policy(t_trv_int, t_switch, t_ist, bvh);
@@ -377,7 +377,7 @@ int_bvh_t build_int_bvh(float t_trv_int, float t_switch, float t_ist, const std:
 
     // fill cluster_idx_map, scaling_factors
     std::vector<int> cluster_idx_map(bvh.node_count);
-    std::vector<float> scaling_factors(num_clusters);
+    std::vector<double> scaling_factors(num_clusters);
     for (int i = 0; i < num_clusters; i++) {
         for (unsigned int j = 0; j < cluster_node_indices[i].size(); j++)
             cluster_idx_map[cluster_node_indices[i][j]] = i;
@@ -592,9 +592,9 @@ void gen_scene_visualization(const bvh_t& bvh, const int_bvh_t& int_bvh) {
 
         bbox_t quant_bbox;
         for (int i = 0; i < 3; i++) {
-            float scaling_factor = inv_sw / curr_cluster.inv_sx_inv_sw;
-            quant_bbox.min[i] = curr_cluster.ref_bounds[i * 2] + scaling_factor * (float)curr_int_node.bounds[i * 2];
-            quant_bbox.max[i] = curr_cluster.ref_bounds[i * 2] + scaling_factor * (float)curr_int_node.bounds[i * 2 + 1];
+            double scaling_factor = inv_sw / curr_cluster.inv_sx_inv_sw;
+            quant_bbox.min[i] = curr_cluster.ref_bounds[i * 2] + scaling_factor * (double)curr_int_node.bounds[i * 2];
+            quant_bbox.max[i] = curr_cluster.ref_bounds[i * 2] + scaling_factor * (double)curr_int_node.bounds[i * 2 + 1];
             assert(std::isfinite(quant_bbox.min[i]));
             assert(std::isfinite(quant_bbox.max[i]));
         }
