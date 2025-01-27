@@ -7,7 +7,7 @@ typedef bvh::Ray<double> ray_t;
 typedef trig_t::Intersection intersection_t;
 
 struct cluster_data_t {
-    uint16_t cluster_idx;
+    uint32_t cluster_idx;
     int_node_t* local_nodes;
     trig_t* local_trigs;
     double inv_sx_inv_sw;
@@ -188,9 +188,9 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
         .num_nodes_in_stk_2 = 0
     };
     std::stack<cluster_data_t> stk_1;
-    std::stack<std::pair<uint16_t, uint16_t>> stk_2;  // [local_node_idx, cluster_idx]
+    std::stack<std::pair<uint32_t, uint32_t>> stk_2;  // [local_node_idx, cluster_idx]
 
-    auto update_cluster_data = [&](uint16_t cluster_idx) -> bool {
+    auto update_cluster_data = [&](uint32_t cluster_idx) -> bool {
         statistics.intersect_bbox++;
         int_cluster_t cluster = int_bvh.clusters[cluster_idx];
         auto y_ref = intersect_bbox(octant, w, cluster.ref_bounds, b, ray.tmax);
@@ -223,7 +223,7 @@ std::optional<intersection_t> int_traverse(const int_bvh_t& int_bvh, ray_t ray, 
     if (!update_cluster_data(0))
         return std::nullopt;
 
-    uint16_t left_local_node_idx = 0;
+    uint32_t left_local_node_idx = 0;
     auto update_node_and_cluster = [&](const decoded_data_t& decoded_data) -> bool {
         switch (decoded_data.child_type) {
             case child_type_t::INTERNAL:

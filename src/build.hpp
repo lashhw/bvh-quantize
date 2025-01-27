@@ -22,11 +22,11 @@ namespace bvh_quantize {
 // for SWITCH:
 //   -: child_cluster_idx
 constexpr int field_b_bits = 3;
-constexpr int field_c_bits = 15 - field_b_bits;
+constexpr int field_c_bits = 31 - field_b_bits;
 constexpr int max_node_in_cluster_size = (1 << field_c_bits);
 constexpr size_t max_trig_in_leaf_size = (1 << field_b_bits) - 1;
 constexpr int max_trig_in_cluster_size = max_node_in_cluster_size;
-constexpr int max_cluster_size = (1 << 15);
+constexpr int max_cluster_size = (1 << 31);
 
 constexpr auto inv_sw = static_cast<double>(1 << 7);
 constexpr int qx_max = (1 << 8) - 1;
@@ -59,7 +59,7 @@ enum class child_type_t {
 struct decoded_data_t {
     child_type_t child_type;
     uint8_t num_trigs;
-    uint16_t idx;
+    uint32_t idx;
 };
 
 struct int_node_t {
